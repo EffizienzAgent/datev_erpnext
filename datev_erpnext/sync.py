@@ -1,5 +1,5 @@
 import frappe
-from datev.intake import add_booking, upsert_document
+from datev.intake import add_booking, discard_document, upsert_document
 from frappe import _
 
 from datev_erpnext.clients import client_for
@@ -27,6 +27,12 @@ def on_submit(doc, method=None):
 	except Exception:
 		frappe.local.message_log = frappe.local.message_log[:messages]
 		frappe.log_error(f"DATEV sync could not be queued for {doc.name}")
+
+
+def before_cancel(doc, method=None):
+	key = source_key(doc.name)
+	if frappe.db.exists("DATEV Document", {"source_key": key}):
+		discard_document(key)
 
 
 def sync_sales_invoice(name: str) -> str | None:
