@@ -9,16 +9,20 @@ NUMBER_FIELD = "datev_test_number"
 
 
 class TestParties(IntegrationTestCase):
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		if not frappe.get_meta("Customer").has_field(NUMBER_FIELD):
+			create_custom_field(
+				"Customer", {"fieldname": NUMBER_FIELD, "fieldtype": "Data", "label": "Test Number"}
+			)
+
 	def setUp(self):
 		self.company = make_company()
 		frappe.db.savepoint("parties")
 		self.addCleanup(frappe.db.rollback, save_point="parties")
 		self.client = make_client(self.company)
 		self.customer = frappe.db.get_value("Customer", {"customer_name": CUSTOMER_NAME})
-		if not frappe.get_meta("Customer").has_field(NUMBER_FIELD):
-			create_custom_field(
-				"Customer", {"fieldname": NUMBER_FIELD, "fieldtype": "Data", "label": "Test Number"}
-			)
 		settings = frappe.get_single("DATEV ERPNext Settings")
 		self.addCleanup(self._restore_settings, settings.customer_number_field)
 		settings.customer_number_field = NUMBER_FIELD
