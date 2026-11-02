@@ -1,0 +1,140 @@
+# Translations template for DATEV for ERPNext.
+# Copyright (C) 2026 EffizienzAgent (Tobias Mende)
+# This file is distributed under the same license as the DATEV for ERPNext project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: DATEV for ERPNext VERSION\n"
+"Report-Msgid-Bugs-To: oss@effizienzagent.de\n"
+"POT-Creation-Date: 2026-11-02 13:27+0000\n"
+"PO-Revision-Date: 2026-11-02 13:27+0000\n"
+"Last-Translator: oss@effizienzagent.de\n"
+"Language-Team: oss@effizienzagent.de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: datev_erpnext/lines.py:30
+#, python-brace-format
+msgid "Account {0} has no numeric account number"
+msgstr ""
+
+#: datev_erpnext/lines.py:107
+#, python-brace-format
+msgid "Booking lines of invoice {0} differ from its total by {1}"
+msgstr ""
+
+#: datev_erpnext/lines.py:44
+#, python-brace-format
+msgid "Charges on account {0} are not supported yet"
+msgstr ""
+
+#. Label of the customer_number_field (Data) field in DocType 'DATEV ERPNext
+#. Settings'
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:41
+#: datev_erpnext/tests/test_translations.py:47
+msgid "Customer Number Field"
+msgstr ""
+
+#. Name of a DocType
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:8
+#: datev_erpnext/tests/test_translations.py:48
+msgid "DATEV ERPNext Settings"
+msgstr ""
+
+#. Name of a role
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:14
+msgid "DATEV Manager"
+msgstr ""
+
+#: datev_erpnext/public/js/sales_invoice.js:11
+msgid "DATEV: not transferred"
+msgstr ""
+
+#: datev_erpnext/public/js/sales_invoice.js:15
+#: datev_erpnext/public/js/sales_invoice.js:18
+#: datev_erpnext/public/js/sales_invoice.js:19 datev_erpnext/sync.py:48
+#, python-brace-format
+msgid "DATEV: {0}"
+msgstr ""
+
+#. Label of the document_image_source (Select) field in DocType 'DATEV ERPNext
+#. Settings'
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:47
+msgid "Document Image Source"
+msgstr ""
+
+#. Label of the enabled (Check) field in DocType 'DATEV ERPNext Settings'
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:35
+msgid "Enabled"
+msgstr ""
+
+#. Description of the 'Customer Number Field' (Data) field in DocType 'DATEV
+#. ERPNext Settings'
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:42
+msgid "Fieldname on Customer used as preferred debtor number. Leave empty to let the DATEV app assign numbers."
+msgstr ""
+
+#. Option for the 'Document Image Source' (Select) field in DocType 'DATEV
+#. ERPNext Settings'
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:48
+msgid "Latest attached PDF"
+msgstr ""
+
+#. Description of the 'Print Format' (Link) field in DocType 'DATEV ERPNext
+#. Settings'
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:56
+msgid "Leave empty to use the default print format of Sales Invoice."
+msgstr ""
+
+#: datev_erpnext/clients.py:9
+#, python-brace-format
+msgid "More than one enabled DATEV Client is assigned to company {0}."
+msgstr ""
+
+#: datev_erpnext/parties.py:36 datev_erpnext/sync.py:103
+#, python-brace-format
+msgid "No enabled DATEV Client is assigned to company {0}."
+msgstr ""
+
+#. Description of the 'Posting Text Template' (Data) field in DocType 'DATEV
+#. ERPNext Settings'
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:63
+#, python-brace-format
+msgid "Placeholders: {customer_name}, {name}, {po_no}. The DATEV app cuts the result to 60 characters."
+msgstr ""
+
+#. Label of the posting_text_template (Data) field in DocType 'DATEV ERPNext
+#. Settings'
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:61
+msgid "Posting Text Template"
+msgstr ""
+
+#. Label of the print_format (Link) field in DocType 'DATEV ERPNext Settings'
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:54
+msgid "Print Format"
+msgstr ""
+
+#. Option for the 'Document Image Source' (Select) field in DocType 'DATEV
+#. ERPNext Settings'
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:48
+msgid "Print format"
+msgstr ""
+
+#. Name of a role
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:19
+msgid "System Manager"
+msgstr ""
+
+#: datev_erpnext/sync.py:96
+#, python-brace-format
+msgid "The posting text template {0} is invalid"
+msgstr ""
+
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.py:11
+#, python-brace-format
+msgid "{0} is not a field of Customer."
+msgstr ""
+
