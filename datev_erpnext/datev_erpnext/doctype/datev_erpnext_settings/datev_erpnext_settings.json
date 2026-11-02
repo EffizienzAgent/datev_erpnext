@@ -1,0 +1,66 @@
+{
+ "docstatus": 0,
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "module": "DATEV ERPNext",
+ "custom": 0,
+ "issingle": 1,
+ "name": "DATEV ERPNext Settings",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "permissions": [
+  {
+   "role": "DATEV Manager",
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1
+  }
+ ],
+ "field_order": [
+  "enabled",
+  "customer_number_field",
+  "document_image_source",
+  "print_format",
+  "posting_text_template"
+ ],
+ "fields": [
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1"
+  },
+  {
+   "fieldname": "customer_number_field",
+   "fieldtype": "Data",
+   "label": "Customer Number Field",
+   "description": "Fieldname on Customer used as preferred debtor number. Leave empty to let the DATEV app assign numbers."
+  },
+  {
+   "fieldname": "document_image_source",
+   "fieldtype": "Select",
+   "label": "Document Image Source",
+   "options": "Print format\nLatest attached PDF",
+   "default": "Print format"
+  },
+  {
+   "fieldname": "print_format",
+   "fieldtype": "Link",
+   "label": "Print Format",
+   "options": "Print Format",
+   "description": "Leave empty to use the default print format of Sales Invoice."
+  },
+  {
+   "fieldname": "posting_text_template",
+   "fieldtype": "Data",
+   "label": "Posting Text Template",
+   "default": "{customer_name}",
+   "description": "Placeholders: {customer_name}, {name}, {po_no}. The DATEV app cuts the result to 60 characters."
+  }
+ ]
+}
