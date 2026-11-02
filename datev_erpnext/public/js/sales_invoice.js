@@ -8,6 +8,7 @@ const DATEV_COLORS = {
 };
 
 function datev_indicator(status) {
+	if (status.error) return [__("DATEV: error"), "red"];
 	if (!status.document) return [__("DATEV: not transferred"), "grey"];
 	const statuses = [status.document.status, ...status.bookings.map((booking) => booking.status)];
 	for (const color of ["red", "orange"]) {

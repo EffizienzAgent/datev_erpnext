@@ -272,11 +272,12 @@ class TestSync(IntegrationTestCase):
 	def test_datev_status(self):
 		make_client(self.company)
 		invoice = self._submitted()
-		self.assertEqual(sync.datev_status(invoice.name), {})
+		self.assertEqual(sync.datev_status(invoice.name), {"error": False})
 
 		document = sync.sync_sales_invoice(invoice.name)
 		status = sync.datev_status(invoice.name)
 		self.assertEqual(status["document"], {"status": "Pending", "external_id": None})
+		self.assertFalse(status["error"])
 		self.assertEqual(
 			[(row["line_key"], row["status"], row["batch"]) for row in status["bookings"]],
 			[(row.line_key, "Pending", None) for row in bookings(document)],
@@ -386,3 +387,60 @@ class TestSync(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			sync.backfill(self.company, "2000-01-01")
 		self.assertEqual(self._sync_jobs(), [])
+
+	def test_datev_status_error(self):
+		make_client(self.company)
+		invoice = self._submitted()
+		document = sync.sync_sales_invoice(invoice.name)
+		self.assertFalse(sync.datev_status(invoice.name)["error"])
+		frappe.db.set_value("DATEV Document", document, "modified", "2000-01-01", update_modified=False)
+		invoice.add_comment("Comment", "DATEV: renderer down")
+		self.assertTrue(sync.datev_status(invoice.name)["error"])
+
+	def test_datev_status_error_without_document(self):
+		invoice = self._submitted()
+		invoice.add_comment("Comment", "DATEV: renderer down")
+		self.assertEqual(sync.datev_status(invoice.name), {"error": True})
+
+	def test_backdated_invoice_comments(self):
+		make_client(self.company)
+		self._set_setting("sync_from_date", nowdate())
+		invoice = self._submitted(posting_date=add_days(nowdate(), -1))
+		sync.on_submit(invoice)
+		self.assertEqual(self._sync_jobs(), [])
+		self.assertEqual(
+			self._comments(invoice), ["DATEV: posting date before sync from date, not transferred."]
+		)
+
+	def test_backdated_invoice_submitted_before_go_live_is_silent(self):
+		make_client(self.company)
+		self._set_setting("sync_from_date", add_days(nowdate(), 2))
+		invoice = self._submitted(posting_date=add_days(nowdate(), 1))
+		self.assertEqual(self._sync_jobs(), [])
+		self.assertEqual(self._comments(invoice), [])
+
+	def test_disabled_client_comments_once(self):
+		client = make_client(self.company, enabled=0)
+		invoice = self._submitted()
+		self.assertEqual(self._sync_jobs(), [])
+		self.assertIsNone(sync.sync_sales_invoice(invoice.name))
+		self.assertIsNone(sync.sync_sales_invoice(invoice.name))
+		self.assertEqual(
+			self._comments(invoice), [f"DATEV: DATEV Client {client.name} is disabled, not transferred."]
+		)
+
+	def test_failure_comment_is_not_repeated(self):
+		make_client(self.company)
+		invoice = self._submitted()
+		for _ in range(2):
+			with patch.object(sync, "document_image", side_effect=RuntimeError("renderer down")):
+				self._sync_failing(invoice.name)
+		self.assertEqual(self._comments(invoice), ["DATEV: renderer down"])
+
+	def test_job_respects_enabled(self):
+		make_client(self.company)
+		invoice = self._submitted()
+		self._set_setting("enabled", 0)
+		self.assertIsNone(sync.sync_sales_invoice(invoice.name))
+		self.assertIsNone(sync.sync_sales_invoice(invoice.name, from_backfill=True))
+		self.assertFalse(frappe.db.exists("DATEV Document", {"source_name": invoice.name}))

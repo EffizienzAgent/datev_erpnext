@@ -18,3 +18,5 @@ doc_events = {
 		"before_cancel": "datev_erpnext.sync.before_cancel",
 	}
 }
+
+scheduler_events = {"daily": ["datev_erpnext.sync.catch_up"]}
