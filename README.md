@@ -8,7 +8,7 @@ ERPNext adapter for the datev app: Sales Invoices to DATEV with Beleglink
 
 ## Status
 
-Covered: Sales Invoices and their returns (Stornorechnungen), sent on submit, plus a backfill for existing invoices. Not covered yet: purchase invoices, payments, charges outside tax accounts. See [mapping](docs/mapping.md).
+Covered: Sales Invoices and their returns (Stornorechnungen), sent on submit from a configurable start date, plus a backfill for existing invoices. Opening invoices are not sent. Not covered yet: purchase invoices, payments, charges outside tax accounts. See [mapping](docs/mapping.md).
 
 ## No compliance promise
 
@@ -22,7 +22,7 @@ datev_erpnext is a technical tool. It does not make you compliant with DATEV req
 - Document image from a print format or the latest attached PDF; with `eu_einvoice` installed, the e-invoice XML is embedded (only with the "Print format" source). A hook (`datev_erpnext_document_image`) replaces the image source.
 - [Customers as debtors](docs/setup.md#customer-numbers) with a preferred number from a field of your choice; `register_customers` to prepare the initial matching.
 - [Backfill](docs/setup.md#backfill) of invoices submitted before go-live.
-- Status indicator on the Sales Invoice form and a comment on the invoice when its data cannot be mapped. Other failures (for example PDF rendering) appear only in the Error Log and as failed background jobs.
+- Status indicator on the Sales Invoice form. Every failed sync rolls back completely, logs an error and leaves a comment `DATEV: <reason>` on the invoice.
 - Invoices that are already in DATEV cannot be cancelled; create a Stornorechnung instead.
 - German translations for the whole UI.
 

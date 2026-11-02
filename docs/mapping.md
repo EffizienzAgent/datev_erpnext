@@ -10,9 +10,10 @@ One DATEV Document per invoice, source key `Sales Invoice:<name>`, direction Out
 
 Items are grouped by revenue account number, tax code and tax rate. Each group is one booking:
 
-- **Tax code:** the item's tax template, otherwise the invoice's taxes and charges template. The core maps the tax code to a BU key in the client's tax keys table; an empty BU key means automatic account. Configure one row per tax code on the DATEV Client.
+- **Tax code:** the item's tax template, otherwise the invoice's taxes and charges template. The core maps the tax code to a BU key in the client's tax keys table; an empty BU key means automatic account. Configure one row per tax code on the DATEV Client; a tax code without a row is rejected.
 - **Rate:** the sum of the item-wise rates of the tax rows on Tax accounts.
 - **Gross:** net amount plus the item-wise tax amount of that group.
+- **Zero lines:** groups with a total of 0 are dropped. An invoice without any remaining line is not sent.
 - **Line key:** `<account>:<tax code>:<rate>`, stable across re-runs, so a repeated sync updates instead of duplicating.
 - **Party account:** the debtor of the customer, the **contra account** is the revenue account number.
 
@@ -34,6 +35,7 @@ The invoice is not synced, everything is rolled back, an error is logged, and a 
 | Missing account number | A revenue account without a numeric account number. |
 | Rounding gap too large | The lines differ from the total by more than the tolerance above. |
 | Invalid posting text template | The template uses unknown placeholders. |
+| Unknown tax code | A line's tax code has no row in the DATEV Client's tax keys. |
 | Client ambiguity | More than one enabled DATEV Client for the Company. |
 
 ## Not supported yet
@@ -41,4 +43,5 @@ The invoice is not synced, everything is rolled back, an error is logged, and a 
 - Purchase invoices (incoming invoices).
 - Payments and bank bookings.
 - Charges outside tax accounts.
+- Opening invoices (`is_opening`); they are skipped.
 - Multi-currency postings: the base amounts are sent in company currency.

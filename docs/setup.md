@@ -21,7 +21,8 @@ Open **DATEV ERPNext Settings**. Defaults are stored on install and migrate if n
 
 | Field | Meaning |
 | --- | --- |
-| Enabled | Sync on submit. Off: nothing is queued. |
+| Enabled | Sync on submit and allow the backfill. Off: nothing is queued. |
+| Sync from date | Invoices with a posting date on or after this date are synced on submit. Empty: no automatic sync. The backfill ignores it. |
 | Customer Number Field | Fieldname on Customer used as preferred debtor number. Empty: the DATEV app assigns numbers. |
 | Document Image Source | `Print format` renders the invoice; `Latest attached PDF` uses the newest PDF attached to the invoice and falls back to the print format. |
 | Print Format | Used when rendering. Empty: default print format of Sales Invoice. |
@@ -35,21 +36,24 @@ If your customers carry a legacy customer number (Kundennummer), add a custom fi
 
 The first source that returns a file wins: hook `datev_erpnext_document_image` (a function `fn(invoice) -> (file_name, bytes) | None`), then the configured source. Use the hook for a custom renderer.
 
+With `Latest attached PDF`, the sync takes whatever PDF is attached when the job runs. A PDF attached before submit (for example an imported original) wins over the rendered print format; attach the final invoice PDF before submitting.
+
 ## Going live
 
-1. Install, set `host_name`, create and test the DATEV Client with a test mandate, fill the settings.
-2. Run `register_customers` for the Company. It creates the party accounts of all customers with submitted invoices (and all customers with a number in the customer number field). Disabled customers are skipped.
+1. Install, set `host_name`, create and test the DATEV Client with a test mandate, fill the settings. Add one row per tax code (Sales Taxes and Charges Template or Item Tax Template name) to the client's tax keys; leave the BU key empty for automatic accounts.
+2. Set **Sync from date** to the go-live date. Leave it empty while you import invoices or run ERPNext in parallel with your old system: every invoice submitted on or after this date is sent to DATEV, imported or not, which can book revenue twice.
+3. Run `register_customers` for the Company. It creates the party accounts of all customers with submitted invoices (and all customers with a number in the customer number field). Disabled customers are skipped.
 
    ```
    bench --site <site> execute datev_erpnext.parties.register_customers --kwargs '{"company": "Example GmbH"}'
    ```
-3. Run the core's initial matching on the client (**Match DATEV accounts** or **Match from file**), so existing DATEV accounts are linked instead of duplicated. Decide the parties that end up "To Clarify".
-4. Run the backfill from the go-live date.
-5. Check stuck items: the DATEV status report, plus comments on invoices that failed.
+4. Run the core's initial matching on the client (**Match DATEV accounts** or **Match from file**), so existing DATEV accounts are linked instead of duplicated. Decide the parties that end up "To Clarify".
+5. If needed, run the backfill for invoices before the sync from date. Run `register_customers` first, so the backfill jobs do not create party accounts concurrently.
+6. Check stuck items: the DATEV status report, plus comments on invoices that failed.
 
 ### Backfill
 
-`datev_erpnext.sync.backfill(company, from_date, to_date=None)` is a POST method for DATEV Managers. It queues every submitted invoice of the Company in the period that has no DATEV Document yet, on the long queue, and returns the count. It is safe to run again.
+`datev_erpnext.sync.backfill(company, from_date, to_date=None)` is a POST method for DATEV Managers. It queues every submitted invoice of the Company in the period that has no DATEV Document yet, on the long queue, and returns the count. It requires **Enabled**, ignores **Sync from date** and skips opening invoices. It is safe to run again. Run `register_customers` before it.
 
 ```
 bench --site <site> execute datev_erpnext.sync.backfill --kwargs '{"company": "Example GmbH", "from_date": "2026-01-01"}'
@@ -57,11 +61,11 @@ bench --site <site> execute datev_erpnext.sync.backfill --kwargs '{"company": "E
 
 ## Daily operation
 
-Submitting a Sales Invoice queues one job per invoice (deduplicated by job id). The job builds the lines, ensures the debtor account, creates the document with the PDF and adds the bookings. The core takes it from there (batches, approval, export).
+Submitting a Sales Invoice on or after the sync from date queues one job per invoice (deduplicated by job id). Opening invoices (`is_opening`) and invoices without non-zero lines are skipped. The job builds the lines, ensures the debtor account, creates the document with the PDF and adds the bookings. The core takes it from there (batches, approval, export).
 
 **Status indicator.** A submitted invoice shows `DATEV: <status>` in its dashboard: grey `not transferred`, orange while pending or batched, green when transferred or exported, red when stuck or failed.
 
-**Failures.** Other failures, such as PDF rendering errors, show up only in the Error Log and as failed background jobs. If an invoice cannot be mapped (see [rejected cases](mapping.md#rejected-cases)), the sync rolls back completely, logs an error and adds a comment `DATEV: <reason>` on the invoice. Fix the cause and run `backfill` for that date; nothing is partially created, so the invoice is picked up again.
+**Failures.** Every sync failure, whether the invoice cannot be mapped (see [rejected cases](mapping.md#rejected-cases)) or something else breaks (for example PDF rendering), rolls back completely, logs an error and adds a comment `DATEV: <reason>` on the invoice. Fix the cause and run `backfill` for that date; nothing is partially created, so the invoice is picked up again.
 
 ## Cancelling
 

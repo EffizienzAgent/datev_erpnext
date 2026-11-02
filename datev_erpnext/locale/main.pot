@@ -1,14 +1,14 @@
 # Translations template for DATEV for ERPNext.
 # Copyright (C) 2026 EffizienzAgent (Tobias Mende)
 # This file is distributed under the same license as the DATEV for ERPNext project.
-# EffizienzAgent, 2026.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: DATEV for ERPNext\n"
+"Project-Id-Version: DATEV for ERPNext VERSION\n"
 "Report-Msgid-Bugs-To: oss@effizienzagent.de\n"
-"POT-Creation-Date: 2026-11-02 13:27+0000\n"
-"PO-Revision-Date: 2026-11-02 13:27+0000\n"
+"POT-Creation-Date: 2026-11-02 13:48+0000\n"
+"PO-Revision-Date: 2026-11-02 13:48+0000\n"
 "Last-Translator: oss@effizienzagent.de\n"
 "Language-Team: oss@effizienzagent.de\n"
 "MIME-Version: 1.0\n"
@@ -21,7 +21,7 @@ msgstr ""
 msgid "Account {0} has no numeric account number"
 msgstr ""
 
-#: datev_erpnext/lines.py:107
+#: datev_erpnext/lines.py:108
 #, python-brace-format
 msgid "Booking lines of invoice {0} differ from its total by {1}"
 msgstr ""
@@ -33,7 +33,7 @@ msgstr ""
 
 #. Label of the customer_number_field (Data) field in DocType 'DATEV ERPNext
 #. Settings'
-#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:41
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:48
 #: datev_erpnext/tests/test_translations.py:47
 msgid "Customer Number Field"
 msgstr ""
@@ -49,43 +49,53 @@ msgstr ""
 msgid "DATEV Manager"
 msgstr ""
 
+#: datev_erpnext/sync.py:143
+msgid "DATEV sync is disabled in DATEV ERPNext Settings."
+msgstr ""
+
 #: datev_erpnext/public/js/sales_invoice.js:11
 msgid "DATEV: not transferred"
 msgstr ""
 
 #: datev_erpnext/public/js/sales_invoice.js:15
 #: datev_erpnext/public/js/sales_invoice.js:18
-#: datev_erpnext/public/js/sales_invoice.js:19 datev_erpnext/sync.py:48
+#: datev_erpnext/public/js/sales_invoice.js:19 datev_erpnext/sync.py:50
 #, python-brace-format
 msgid "DATEV: {0}"
 msgstr ""
 
 #. Label of the document_image_source (Select) field in DocType 'DATEV ERPNext
 #. Settings'
-#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:47
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:54
 msgid "Document Image Source"
 msgstr ""
 
 #. Label of the enabled (Check) field in DocType 'DATEV ERPNext Settings'
-#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:35
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:36
 msgid "Enabled"
 msgstr ""
 
 #. Description of the 'Customer Number Field' (Data) field in DocType 'DATEV
 #. ERPNext Settings'
-#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:42
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:49
 msgid "Fieldname on Customer used as preferred debtor number. Leave empty to let the DATEV app assign numbers."
+msgstr ""
+
+#. Description of the 'Sync from date' (Date) field in DocType 'DATEV ERPNext
+#. Settings'
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:43
+msgid "Invoices posted on or after this date are synced on submit. Empty: no automatic sync. Use the backfill for earlier invoices."
 msgstr ""
 
 #. Option for the 'Document Image Source' (Select) field in DocType 'DATEV
 #. ERPNext Settings'
-#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:48
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:55
 msgid "Latest attached PDF"
 msgstr ""
 
 #. Description of the 'Print Format' (Link) field in DocType 'DATEV ERPNext
 #. Settings'
-#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:56
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:63
 msgid "Leave empty to use the default print format of Sales Invoice."
 msgstr ""
 
@@ -94,33 +104,38 @@ msgstr ""
 msgid "More than one enabled DATEV Client is assigned to company {0}."
 msgstr ""
 
-#: datev_erpnext/parties.py:36 datev_erpnext/sync.py:103
+#: datev_erpnext/parties.py:37 datev_erpnext/sync.py:145
 #, python-brace-format
 msgid "No enabled DATEV Client is assigned to company {0}."
 msgstr ""
 
 #. Description of the 'Posting Text Template' (Data) field in DocType 'DATEV
 #. ERPNext Settings'
-#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:63
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:70
 #, python-brace-format
 msgid "Placeholders: {customer_name}, {name}, {po_no}. The DATEV app cuts the result to 60 characters."
 msgstr ""
 
 #. Label of the posting_text_template (Data) field in DocType 'DATEV ERPNext
 #. Settings'
-#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:61
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:68
 msgid "Posting Text Template"
 msgstr ""
 
 #. Label of the print_format (Link) field in DocType 'DATEV ERPNext Settings'
-#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:54
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:61
 msgid "Print Format"
 msgstr ""
 
 #. Option for the 'Document Image Source' (Select) field in DocType 'DATEV
 #. ERPNext Settings'
-#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:48
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:55
 msgid "Print format"
+msgstr ""
+
+#. Label of the sync_from_date (Date) field in DocType 'DATEV ERPNext Settings'
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:42
+msgid "Sync from date"
 msgstr ""
 
 #. Name of a role
@@ -128,7 +143,12 @@ msgstr ""
 msgid "System Manager"
 msgstr ""
 
-#: datev_erpnext/sync.py:96
+#: datev_erpnext/sync.py:123
+#, python-brace-format
+msgid "Tax code {0} has no row in the tax keys of DATEV Client {1}. Add it to the DATEV Client's tax keys; leave the BU key empty for automatic accounts."
+msgstr ""
+
+#: datev_erpnext/sync.py:136
 #, python-brace-format
 msgid "The posting text template {0} is invalid"
 msgstr ""
