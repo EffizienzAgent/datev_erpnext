@@ -5,12 +5,15 @@ COMPANY_NAME = "Datev Test GmbH"
 CUSTOMER_NAME = "Muster Automaten GmbH"
 TAX_ID = "DE123456789"
 PRICE_LIST = "Standard Selling"
+ACCOUNT_TEMPLATE = "DE 19 % alle Konten"
 
 ACCOUNTS = (
 	("Erlöse 19 % USt", "4400", "Income Account", "Direct Income", 0),
 	("Steuerfreie Umsätze", "4100", "Income Account", "Direct Income", 0),
 	("Erlöse Zubehör", "4200", "Income Account", "Direct Income", 0),
 	("Umsatzsteuer 19 %", "3806", "Tax", "Duties and Taxes", 19),
+	("USt 7 %", "3801", "Tax", "Duties and Taxes", 7),
+	("Vorsteuer 19 %", "1406", "Tax", "Tax Assets", 19),
 	("Forderungen aus Lieferungen und Leistungen", "1200", "Receivable", "Accounts Receivable", 0),
 )
 
@@ -140,6 +143,24 @@ def _ensure_templates(company):
 					],
 				}
 			).insert()
+	_ensure_account_template(company)
+
+
+def _ensure_account_template(company):
+	if frappe.db.exists("Item Tax Template", f"{ACCOUNT_TEMPLATE} - {company.abbr}"):
+		return
+	frappe.get_doc(
+		{
+			"doctype": "Item Tax Template",
+			"title": ACCOUNT_TEMPLATE,
+			"company": company.name,
+			"taxes": [
+				{"tax_type": _account(company, "1406"), "tax_rate": 19},
+				{"tax_type": _account(company, "3806"), "tax_rate": 19},
+				{"tax_type": _account(company, "3801"), "tax_rate": 7, "not_applicable": 1},
+			],
+		}
+	).insert()
 
 
 def _ensure_items(company):
@@ -147,6 +168,8 @@ def _ensure_items(company):
 		("MIETE", "4400", f"DE 19 % - {company.abbr}"),
 		("VERS", "4100", f"DE steuerfrei - {company.abbr}"),
 		("ZUB", "4200", f"DE 19 % - {company.abbr}"),
+		("SERVICE", "4400", None),
+		("GERAET", "4400", f"{ACCOUNT_TEMPLATE} - {company.abbr}"),
 	):
 		if frappe.db.exists("Item", code):
 			continue
@@ -159,7 +182,7 @@ def _ensure_items(company):
 				"stock_uom": "Nos",
 				"is_stock_item": 0,
 				"item_defaults": [{"company": company.name, "income_account": _account(company, account)}],
-				"taxes": [{"item_tax_template": template}],
+				"taxes": [{"item_tax_template": template}] if template else [],
 			}
 		).insert()
 
@@ -227,5 +250,5 @@ def make_invoice(company, items, **overrides):
 		row.item_tax_template = template
 	if not invoice.taxes:
 		invoice.taxes_and_charges = f"DE 19 % - {frappe.db.get_value('Company', company, 'abbr')}"
-		invoice.set_taxes()
+		invoice.append_taxes_from_master()
 	return invoice.insert()

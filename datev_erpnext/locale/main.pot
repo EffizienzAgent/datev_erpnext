@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: DATEV for ERPNext VERSION\n"
 "Report-Msgid-Bugs-To: oss@effizienzagent.de\n"
-"POT-Creation-Date: 2026-11-02 13:48+0000\n"
-"PO-Revision-Date: 2026-11-02 13:48+0000\n"
+"POT-Creation-Date: 2026-11-02 19:11+0000\n"
+"PO-Revision-Date: 2026-11-02 19:11+0000\n"
 "Last-Translator: oss@effizienzagent.de\n"
 "Language-Team: oss@effizienzagent.de\n"
 "MIME-Version: 1.0\n"
@@ -16,19 +16,32 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: datev_erpnext/lines.py:30
+#: datev_erpnext/lines.py:34
 #, python-brace-format
 msgid "Account {0} has no numeric account number"
 msgstr ""
 
-#: datev_erpnext/lines.py:108
+#: datev_erpnext/lines.py:182
 #, python-brace-format
 msgid "Booking lines of invoice {0} differ from its total by {1}"
 msgstr ""
 
-#: datev_erpnext/lines.py:44
+#: datev_erpnext/lines.py:56
 #, python-brace-format
 msgid "Charges on account {0} are not supported yet"
+msgstr ""
+
+#: datev_erpnext/datev_erpnext/report/sales_invoices_without_datev/sales_invoices_without_datev.js:5
+#: datev_erpnext/datev_erpnext/report/sales_invoices_without_datev/sales_invoices_without_datev.py:23
+msgid "Company"
+msgstr ""
+
+#: datev_erpnext/datev_erpnext/report/sales_invoices_without_datev/sales_invoices_without_datev.py:31
+msgid "Customer"
+msgstr ""
+
+#: datev_erpnext/datev_erpnext/report/sales_invoices_without_datev/sales_invoices_without_datev.py:36
+msgid "Customer Name"
 msgstr ""
 
 #. Label of the customer_number_field (Data) field in DocType 'DATEV ERPNext
@@ -36,6 +49,11 @@ msgstr ""
 #: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:48
 #: datev_erpnext/tests/test_translations.py:47
 msgid "Customer Number Field"
+msgstr ""
+
+#: datev_erpnext/sync.py:61
+#, python-brace-format
+msgid "DATEV Client {0} is disabled, not transferred."
 msgstr ""
 
 #. Name of a DocType
@@ -49,17 +67,30 @@ msgstr ""
 msgid "DATEV Manager"
 msgstr ""
 
-#: datev_erpnext/sync.py:143
+#: datev_erpnext/sync.py:69
+#, python-brace-format
+msgid "DATEV note: {0}"
+msgstr ""
+
+#: datev_erpnext/sync.py:198
 msgid "DATEV sync is disabled in DATEV ERPNext Settings."
 msgstr ""
 
-#: datev_erpnext/public/js/sales_invoice.js:11
-msgid "DATEV: not transferred"
+#: datev_erpnext/public/js/sales_invoice.js:14
+msgid "DATEV: client disabled"
+msgstr ""
+
+#: datev_erpnext/public/js/sales_invoice.js:13
+msgid "DATEV: error"
 msgstr ""
 
 #: datev_erpnext/public/js/sales_invoice.js:15
-#: datev_erpnext/public/js/sales_invoice.js:18
-#: datev_erpnext/public/js/sales_invoice.js:19 datev_erpnext/sync.py:50
+msgid "DATEV: not transferred"
+msgstr ""
+
+#: datev_erpnext/public/js/sales_invoice.js:19
+#: datev_erpnext/public/js/sales_invoice.js:22
+#: datev_erpnext/public/js/sales_invoice.js:23 datev_erpnext/sync.py:65
 #, python-brace-format
 msgid "DATEV: {0}"
 msgstr ""
@@ -81,6 +112,20 @@ msgstr ""
 msgid "Fieldname on Customer used as preferred debtor number. Leave empty to let the DATEV app assign numbers."
 msgstr ""
 
+#: datev_erpnext/datev_erpnext/report/sales_invoices_without_datev/sales_invoices_without_datev.py:37
+msgid "Grand Total"
+msgstr ""
+
+#: datev_erpnext/lines.py:170
+#, python-brace-format
+msgid "Invoice {0} has a total of zero but booking lines that are not zero. DATEV cannot take a document without an amount."
+msgstr ""
+
+#: datev_erpnext/lines.py:124
+#, python-brace-format
+msgid "Invoice {0} has a write-off. Write-offs are not supported yet."
+msgstr ""
+
 #. Description of the 'Sync from date' (Date) field in DocType 'DATEV ERPNext
 #. Settings'
 #: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:43
@@ -95,8 +140,18 @@ msgstr ""
 
 #. Description of the 'Print Format' (Link) field in DocType 'DATEV ERPNext
 #. Settings'
-#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:63
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:64
 msgid "Leave empty to use the default print format of Sales Invoice."
+msgstr ""
+
+#: datev_erpnext/lines.py:83
+#, python-brace-format
+msgid "Line on account {0} has no tax template. Set an item tax template or a sales taxes template."
+msgstr ""
+
+#: datev_erpnext/lines.py:114
+#, python-brace-format
+msgid "Line on account {0} with tax template {1} expects a rate of {2} but {3} is applied."
 msgstr ""
 
 #: datev_erpnext/clients.py:9
@@ -104,21 +159,30 @@ msgstr ""
 msgid "More than one enabled DATEV Client is assigned to company {0}."
 msgstr ""
 
-#: datev_erpnext/parties.py:37 datev_erpnext/sync.py:145
+#: datev_erpnext/parties.py:38 datev_erpnext/sync.py:200
 #, python-brace-format
 msgid "No enabled DATEV Client is assigned to company {0}."
 msgstr ""
 
+#: datev_erpnext/lines.py:103
+#, python-brace-format
+msgid "None of the tax accounts of tax template {0} is in the taxes of invoice {1}."
+msgstr ""
+
 #. Description of the 'Posting Text Template' (Data) field in DocType 'DATEV
 #. ERPNext Settings'
-#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:70
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:71
 #, python-brace-format
 msgid "Placeholders: {customer_name}, {name}, {po_no}. The DATEV app cuts the result to 60 characters."
 msgstr ""
 
+#: datev_erpnext/datev_erpnext/report/sales_invoices_without_datev/sales_invoices_without_datev.py:28
+msgid "Posting Date"
+msgstr ""
+
 #. Label of the posting_text_template (Data) field in DocType 'DATEV ERPNext
 #. Settings'
-#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:68
+#: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:69
 msgid "Posting Text Template"
 msgstr ""
 
@@ -133,6 +197,19 @@ msgstr ""
 msgid "Print format"
 msgstr ""
 
+#: datev_erpnext/datev_erpnext/report/sales_invoices_without_datev/sales_invoices_without_datev.py:38
+msgid "Reason"
+msgstr ""
+
+#: datev_erpnext/datev_erpnext/report/sales_invoices_without_datev/sales_invoices_without_datev.py:16
+msgid "Sales Invoice"
+msgstr ""
+
+#. Name of a report
+#: datev_erpnext/datev_erpnext/report/sales_invoices_without_datev/sales_invoices_without_datev.json:11
+msgid "Sales Invoices without DATEV"
+msgstr ""
+
 #. Label of the sync_from_date (Date) field in DocType 'DATEV ERPNext Settings'
 #: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:42
 msgid "Sync from date"
@@ -143,14 +220,27 @@ msgstr ""
 msgid "System Manager"
 msgstr ""
 
-#: datev_erpnext/sync.py:123
+#: datev_erpnext/sync.py:178
 #, python-brace-format
 msgid "Tax code {0} has no row in the tax keys of DATEV Client {1}. Add it to the DATEV Client's tax keys; leave the BU key empty for automatic accounts."
 msgstr ""
 
-#: datev_erpnext/sync.py:136
+#: datev_erpnext/lines.py:48
+#, python-brace-format
+msgid "Tax row on account {0} uses charge type {1}, which is not supported yet."
+msgstr ""
+
+#: datev_erpnext/sync.py:191
 #, python-brace-format
 msgid "The posting text template {0} is invalid"
+msgstr ""
+
+#: datev_erpnext/sync.py:116
+msgid "no booking lines, not transferred."
+msgstr ""
+
+#: datev_erpnext/sync.py:55
+msgid "posting date before sync from date, not transferred."
 msgstr ""
 
 #: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.py:11

@@ -8,7 +8,7 @@ ERPNext adapter for the datev app: Sales Invoices to DATEV with Beleglink
 
 ## Status
 
-Covered: Sales Invoices and their returns (Stornorechnungen), sent on submit from a configurable start date, plus a backfill for existing invoices. Opening invoices are not sent. Not covered yet: purchase invoices, payments, charges outside tax accounts. See [mapping](docs/mapping.md).
+Covered: Sales Invoices and their returns (Stornorechnungen), sent on submit from a configurable start date, plus a backfill for existing invoices and a daily catch-up for invoices that did not make it. Opening invoices are not sent. Not covered yet: purchase invoices, payments, write-offs, charges outside tax accounts. See [mapping](docs/mapping.md).
 
 ## No compliance promise
 
@@ -17,12 +17,13 @@ datev_erpnext is a technical tool. It does not make you compliant with DATEV req
 ## Features
 
 - Sync on submit as a background job, idempotent: re-running never creates a second document or booking.
-- [One booking per revenue account and tax code](docs/mapping.md#lines), gross, with the rounding difference on the largest line.
+- [One booking per revenue account and tax code](docs/mapping.md#lines), gross, with the rounding difference on the largest line. Every line needs a tax template, and the applied rate must match it.
 - Stornorechnungen (ERPNext returns) with the opposite debit/credit side.
-- Document image from a print format or the latest attached PDF; with `eu_einvoice` installed, the e-invoice XML is embedded (only with the "Print format" source). A hook (`datev_erpnext_document_image`) replaces the image source.
+- Document image from a print format or the latest attached PDF; with `eu_einvoice` installed, the ZUGFeRD XML is embedded (only with the "Print format" source and a ZUGFeRD profile). A hook (`datev_erpnext_document_image`) replaces the image source.
 - [Customers as debtors](docs/setup.md#customer-numbers) with a preferred number from a field of your choice; `register_customers` to prepare the initial matching.
 - [Backfill](docs/setup.md#backfill) of invoices submitted before go-live.
-- Status indicator on the Sales Invoice form. Every failed sync rolls back completely, logs an error and leaves a comment `DATEV: <reason>` on the invoice.
+- [Daily catch-up](docs/setup.md#catch-up-and-report) that re-queues submitted invoices without a DATEV Document, and the report **Sales Invoices without DATEV** with the reason for each.
+- Status indicator on the Sales Invoice form. Every failed sync rolls back completely, logs an error and leaves a comment `DATEV: <reason>` on the invoice; the indicator turns red. Invoices that are deliberately not sent get a `DATEV note: <reason>` instead.
 - Invoices that are already in DATEV cannot be cancelled; create a Stornorechnung instead.
 - German translations for the whole UI.
 

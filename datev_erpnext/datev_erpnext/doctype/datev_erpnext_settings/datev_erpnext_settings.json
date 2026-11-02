@@ -60,6 +60,7 @@
    "fieldtype": "Link",
    "label": "Print Format",
    "options": "Print Format",
+   "link_filters": "[[\"Print Format\",\"doc_type\",\"=\",\"Sales Invoice\"]]",
    "description": "Leave empty to use the default print format of Sales Invoice."
   },
   {

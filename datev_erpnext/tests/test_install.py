@@ -13,6 +13,12 @@ class TestInstall(IntegrationTestCase):
 		self.assertIn("datev", apps)
 		self.assertIn("erpnext", apps)
 
+	def test_print_format_filtered_to_sales_invoice(self):
+		field = frappe.get_meta("DATEV ERPNext Settings").get_field("print_format")
+		self.assertEqual(
+			frappe.parse_json(field.link_filters), [["Print Format", "doc_type", "=", "Sales Invoice"]]
+		)
+
 
 class TestDefaults(IntegrationTestCase):
 	def test_defaults_stored_when_single_is_empty(self):

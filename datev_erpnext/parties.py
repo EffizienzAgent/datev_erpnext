@@ -16,6 +16,7 @@ def _preferred_number(customer: str) -> int | None:
 
 
 def party_account_for(client, customer: str) -> str:
+	frappe.db.get_value("Customer", customer, "name", for_update=True)
 	name, tax_id = frappe.db.get_value("Customer", customer, ["customer_name", "tax_id"])
 	return ensure_party_account(
 		client.name,
@@ -29,7 +30,7 @@ def party_account_for(client, customer: str) -> str:
 	)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def register_customers(company: str) -> int:
 	frappe.only_for("DATEV Manager")
 	client = client_for(company)
