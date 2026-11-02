@@ -9,3 +9,7 @@ required_apps = ["erpnext", "datev"]
 
 after_install = "datev_erpnext.setup.apply_defaults"
 after_migrate = "datev_erpnext.setup.apply_defaults"
+
+doctype_js = {"Sales Invoice": "public/js/sales_invoice.js"}
+
+doc_events = {"Sales Invoice": {"on_submit": "datev_erpnext.sync.on_submit"}}
