@@ -9,6 +9,7 @@ CENT = Decimal("0.01")
 RATE_TOLERANCE = 0.001
 ITEM_TAX_TEMPLATE = "Item Tax Template"
 SALES_TAX_TEMPLATE = "Sales Taxes and Charges Template"
+ON_NET_TOTAL = "On Net Total"
 
 
 @dataclass(frozen=True)
@@ -37,12 +38,20 @@ def _is_tax_account(account: str) -> bool:
 	return frappe.get_cached_value("Account", account, "account_type") == "Tax"
 
 
-def _tax_rows(invoice) -> set[str]:
-	tax_rows = set()
+def _tax_rows(invoice) -> dict[str, str]:
+	tax_rows = {}
 	for tax in invoice.get("taxes") or []:
+		amount = _decimal(tax.base_tax_amount_after_discount_amount)
 		if _is_tax_account(tax.account_head):
-			tax_rows.add(tax.name)
-		elif _decimal(tax.base_tax_amount_after_discount_amount):
+			if tax.charge_type != ON_NET_TOTAL and amount:
+				frappe.throw(
+					_("Tax row on account {0} uses charge type {1}, which is not supported yet.").format(
+						tax.account_head, _(tax.charge_type)
+					),
+					frappe.ValidationError,
+				)
+			tax_rows[tax.name] = tax.account_head
+		elif amount:
 			frappe.throw(
 				_("Charges on account {0} are not supported yet").format(tax.account_head),
 				frappe.ValidationError,
@@ -50,8 +59,7 @@ def _tax_rows(invoice) -> set[str]:
 	return tax_rows
 
 
-def _item_taxes(invoice) -> dict[str, tuple[float, Decimal]]:
-	tax_rows = _tax_rows(invoice)
+def _item_taxes(invoice, tax_rows: dict[str, str]) -> dict[str, tuple[float, Decimal]]:
 	taxes = defaultdict(lambda: (0.0, Decimal(0)))
 	for row in invoice.get("item_wise_tax_details") or []:
 		if row.tax_row not in tax_rows:
@@ -78,13 +86,26 @@ def _tax_code(invoice, item) -> tuple[str, str]:
 	)
 
 
-def _expected_rate(doctype: str, name: str) -> float:
+def _template_rates(doctype: str, name: str) -> list[tuple[str, float]]:
 	template = frappe.get_cached_doc(doctype, name)
 	if doctype == ITEM_TAX_TEMPLATE:
-		rows = [(row.tax_type, row.tax_rate) for row in template.taxes]
+		rows = [(row.tax_type, row.tax_rate) for row in template.taxes if not row.not_applicable]
 	else:
-		rows = [(row.account_head, row.rate) for row in template.taxes if row.charge_type == "On Net Total"]
-	return sum(rate or 0 for account, rate in rows if _is_tax_account(account))
+		rows = [(row.account_head, row.rate) for row in template.taxes if row.charge_type == ON_NET_TOTAL]
+	return [(account, rate or 0) for account, rate in rows if _is_tax_account(account)]
+
+
+def _expected_rate(invoice, doctype: str, name: str, accounts: set[str]) -> float:
+	rates = _template_rates(doctype, name)
+	on_invoice = [rate for account, rate in rates if account in accounts]
+	if not on_invoice and any(rate for _account, rate in rates):
+		frappe.throw(
+			_("None of the tax accounts of tax template {0} is in the taxes of invoice {1}.").format(
+				name, invoice.name
+			),
+			frappe.ValidationError,
+		)
+	return sum(on_invoice)
 
 
 def _check_rate(item, code: str, expected: float, applied: float):
@@ -103,14 +124,16 @@ def sales_invoice_lines(invoice) -> list[Line]:
 			_("Invoice {0} has a write-off. Write-offs are not supported yet.").format(invoice.name),
 			frappe.ValidationError,
 		)
-	taxes = _item_taxes(invoice)
+	tax_rows = _tax_rows(invoice)
+	accounts = set(tax_rows.values())
+	taxes = _item_taxes(invoice, tax_rows)
 	expected = {}
 	totals = defaultdict(Decimal)
 	for item in invoice.items:
 		rate, tax = taxes[item.name]
 		doctype, code = _tax_code(invoice, item)
 		if (doctype, code) not in expected:
-			expected[doctype, code] = _expected_rate(doctype, code)
+			expected[doctype, code] = _expected_rate(invoice, doctype, code, accounts)
 		_check_rate(item, code, expected[doctype, code], rate)
 		totals[_account_number(item.income_account), code, rate] += _decimal(item.base_net_amount) + tax
 

@@ -272,7 +272,7 @@ class TestSync(IntegrationTestCase):
 	def test_datev_status(self):
 		make_client(self.company)
 		invoice = self._submitted()
-		self.assertEqual(sync.datev_status(invoice.name), {"error": False})
+		self.assertEqual(sync.datev_status(invoice.name), {"error": False, "notice": None})
 
 		document = sync.sync_sales_invoice(invoice.name)
 		status = sync.datev_status(invoice.name)
@@ -394,13 +394,23 @@ class TestSync(IntegrationTestCase):
 		document = sync.sync_sales_invoice(invoice.name)
 		self.assertFalse(sync.datev_status(invoice.name)["error"])
 		frappe.db.set_value("DATEV Document", document, "modified", "2000-01-01", update_modified=False)
-		invoice.add_comment("Comment", "DATEV: renderer down")
+		sync._comment(invoice, "renderer down")
 		self.assertTrue(sync.datev_status(invoice.name)["error"])
 
 	def test_datev_status_error_without_document(self):
 		invoice = self._submitted()
-		invoice.add_comment("Comment", "DATEV: renderer down")
-		self.assertEqual(sync.datev_status(invoice.name), {"error": True})
+		sync._comment(invoice, "renderer down")
+		self.assertEqual(sync.datev_status(invoice.name), {"error": True, "notice": None})
+
+	def test_datev_status_ignores_manual_comments(self):
+		invoice = self._submitted()
+		invoice.add_comment("Comment", "DATEV: please check")
+		self.assertEqual(sync.datev_status(invoice.name), {"error": False, "notice": None})
+
+	def test_datev_status_notice(self):
+		make_client(self.company, enabled=0)
+		invoice = self._submitted()
+		self.assertEqual(sync.datev_status(invoice.name), {"error": False, "notice": "client_disabled"})
 
 	def test_backdated_invoice_comments(self):
 		make_client(self.company)
@@ -409,8 +419,9 @@ class TestSync(IntegrationTestCase):
 		sync.on_submit(invoice)
 		self.assertEqual(self._sync_jobs(), [])
 		self.assertEqual(
-			self._comments(invoice), ["DATEV: posting date before sync from date, not transferred."]
+			self._comments(invoice), ["DATEV note: posting date before sync from date, not transferred."]
 		)
+		self.assertEqual(sync.datev_status(invoice.name), {"error": False, "notice": "not_transferred"})
 
 	def test_backdated_invoice_submitted_before_go_live_is_silent(self):
 		make_client(self.company)
@@ -426,7 +437,7 @@ class TestSync(IntegrationTestCase):
 		self.assertIsNone(sync.sync_sales_invoice(invoice.name))
 		self.assertIsNone(sync.sync_sales_invoice(invoice.name))
 		self.assertEqual(
-			self._comments(invoice), [f"DATEV: DATEV Client {client.name} is disabled, not transferred."]
+			self._comments(invoice), [f"DATEV note: DATEV Client {client.name} is disabled, not transferred."]
 		)
 
 	def test_failure_comment_is_not_repeated(self):
@@ -497,3 +508,16 @@ class TestSync(IntegrationTestCase):
 		with patch.object(sync, "document_image", side_effect=document_image):
 			self.assertIsNone(sync.sync_sales_invoice(invoice.name))
 		self.assertFalse(frappe.db.exists("DATEV Document", {"source_name": invoice.name}))
+
+	def test_comment_repeated_after_other_comment(self):
+		make_client(self.company)
+		invoice = self._submitted()
+		for error in ("renderer down", "booking rejected", "renderer down"):
+			sync._comment(invoice, error)
+		self.assertEqual(len(self._comments(invoice)), 3)
+
+	def test_invoice_without_lines_gets_note(self):
+		make_client(self.company)
+		invoice = self._submitted([("ZUB", 1, 0)])
+		self.assertIsNone(sync.sync_sales_invoice(invoice.name))
+		self.assertEqual(self._comments(invoice), ["DATEV note: no booking lines, not transferred."])

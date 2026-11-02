@@ -1,9 +1,7 @@
 import frappe
 from datev.intake import add_booking, discard_document, upsert_document
 from frappe import _
-from frappe.query_builder.functions import IfNull
 from frappe.utils import getdate
-from pypika.functions import Concat
 
 from datev_erpnext.clients import client_for
 from datev_erpnext.images import document_image
@@ -13,7 +11,10 @@ from datev_erpnext.parties import party_account_for
 SETTINGS = "DATEV ERPNext Settings"
 SYNC_JOB = "datev_erpnext.sync.sync_sales_invoice"
 CATCH_UP_LIMIT = 500
-COMMENT_PREFIX = "DATEV: "
+ERROR = "datev_erpnext:error"
+NOT_TRANSFERRED = "datev_erpnext:not_transferred"
+CLIENT_DISABLED = "datev_erpnext:client_disabled"
+SUBJECTS = (ERROR, NOT_TRANSFERRED, CLIENT_DISABLED)
 
 
 def source_key(name: str) -> str:
@@ -51,28 +52,39 @@ def _queue_on_submit(doc, sync_from_date):
 	elif getdate(doc.posting_date) >= sync_from_date:
 		_enqueue(doc.name, queue="short", enqueue_after_commit=True)
 	elif getdate(doc.modified) >= sync_from_date:
-		_comment(doc, _("posting date before sync from date, not transferred."))
+		_note(doc, NOT_TRANSFERRED, _("posting date before sync from date, not transferred."))
 
 
 def _comment_if_client_disabled(doc):
 	disabled = frappe.db.get_value("DATEV Client", {"company": doc.company, "enabled": 0}, "name")
 	if disabled:
-		_comment(doc, _("DATEV Client {0} is disabled, not transferred.").format(disabled))
+		_note(doc, CLIENT_DISABLED, _("DATEV Client {0} is disabled, not transferred.").format(disabled))
 
 
 def _comment(doc, error):
-	text = _("DATEV: {0}").format(error)
+	_add_comment(doc, ERROR, _("DATEV: {0}").format(error))
+
+
+def _note(doc, subject: str, message: str):
+	_add_comment(doc, subject, _("DATEV note: {0}").format(message))
+
+
+def _add_comment(doc, subject: str, text: str):
 	try:
-		if not frappe.db.exists(
-			"Comment",
+		latest = latest_comments([doc.name]).get(doc.name)
+		if latest and latest.content == text:
+			return
+		frappe.get_doc(
 			{
+				"doctype": "Comment",
+				"comment_type": "Comment",
+				"comment_email": frappe.session.user,
 				"reference_doctype": doc.doctype,
 				"reference_name": doc.name,
-				"comment_type": "Comment",
+				"subject": subject,
 				"content": text,
-			},
-		):
-			doc.add_comment("Comment", text)
+			}
+		).insert(ignore_permissions=True)
 	except Exception:
 		frappe.log_error(f"DATEV comment could not be added for {doc.name}")
 
@@ -101,6 +113,7 @@ def sync_sales_invoice(name: str, from_backfill: bool = False) -> str | None:
 			_comment_if_client_disabled(invoice)
 			return None
 		if not sales_invoice_lines(invoice):
+			_note(invoice, NOT_TRANSFERRED, _("no booking lines, not transferred."))
 			return None
 		image = document_image(invoice)
 		locked = frappe.get_doc("Sales Invoice", name, for_update=True)
@@ -204,32 +217,41 @@ def catch_up():
 def missing_invoices(companies: list[str], from_date, to_date=None, limit: int | None = None) -> list:
 	if not companies:
 		return []
-	invoice = frappe.qb.DocType("Sales Invoice")
-	document = frappe.qb.DocType("DATEV Document")
-	synced = frappe.qb.from_(document).select(document.source_key)
-	query = (
-		frappe.qb.from_(invoice)
-		.select(
-			invoice.name,
-			invoice.company,
-			invoice.posting_date,
-			invoice.customer,
-			invoice.customer_name,
-			invoice.base_grand_total,
-		)
-		.where(invoice.company.isin(companies))
-		.where(invoice.docstatus == 1)
-		.where(IfNull(invoice.is_opening, "") != "Yes")
-		.where(invoice.posting_date >= from_date)
-		.where(Concat("Sales Invoice:", invoice.name).notin(synced))
-		.orderby(invoice.posting_date)
-		.orderby(invoice.name)
+	to_date_filter = "and invoice.posting_date <= %(to_date)s" if to_date else ""
+	limit_clause = "limit %(limit)s" if limit else ""
+	return frappe.db.sql(
+		f"""
+		select invoice.name, invoice.company, invoice.posting_date, invoice.customer,
+			invoice.customer_name, invoice.base_grand_total
+		from `tabSales Invoice` invoice
+		where invoice.company in %(companies)s
+			and invoice.docstatus = 1
+			and ifnull(invoice.is_opening, '') != 'Yes'
+			and invoice.posting_date >= %(from_date)s
+			{to_date_filter}
+			and not exists (
+				select 1 from `tabDATEV Document` document
+				where document.source_key = concat('Sales Invoice:', invoice.name)
+			)
+		order by exists (
+				select 1 from `tabComment` comment
+				where comment.reference_doctype = 'Sales Invoice'
+					and comment.reference_name = invoice.name
+					and comment.subject in %(subjects)s
+					and comment.creation >= invoice.modified
+			),
+			invoice.posting_date, invoice.name
+		{limit_clause}
+		""",
+		{
+			"companies": tuple(companies),
+			"from_date": from_date,
+			"to_date": to_date,
+			"subjects": SUBJECTS,
+			"limit": limit,
+		},
+		as_dict=True,
 	)
-	if to_date:
-		query = query.where(invoice.posting_date <= to_date)
-	if limit:
-		query = query.limit(limit)
-	return query.run(as_dict=True)
 
 
 def latest_comments(names: list[str]) -> dict[str, frappe._dict]:
@@ -241,10 +263,10 @@ def latest_comments(names: list[str]) -> dict[str, frappe._dict]:
 			"reference_doctype": "Sales Invoice",
 			"reference_name": ("in", names),
 			"comment_type": "Comment",
-			"content": ("like", f"{COMMENT_PREFIX}%"),
+			"subject": ("in", SUBJECTS),
 		},
-		fields=["reference_name", "content", "creation"],
-		order_by="creation desc",
+		fields=["reference_name", "subject", "content", "creation"],
+		order_by="creation desc, name desc",
 	)
 	latest = {}
 	for comment in comments:
@@ -262,9 +284,12 @@ def datev_status(name: str) -> dict:
 		as_dict=True,
 	)
 	comment = latest_comments([name]).get(name)
-	error = bool(comment) and (not document or comment.creation > document.modified)
+	error = (
+		bool(comment) and comment.subject == ERROR and (not document or comment.creation > document.modified)
+	)
+	notice = comment.subject.split(":")[1] if comment and comment.subject != ERROR and not document else None
 	if not document:
-		return {"error": error}
+		return {"error": error, "notice": notice}
 	bookings = frappe.get_all(
 		"DATEV Booking",
 		filters={"document": document.name},
@@ -275,4 +300,5 @@ def datev_status(name: str) -> dict:
 		"document": {"status": document.status, "external_id": document.external_id},
 		"bookings": bookings,
 		"error": error,
+		"notice": notice,
 	}

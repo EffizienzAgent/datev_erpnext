@@ -23,7 +23,7 @@ datev_erpnext is a technical tool. It does not make you compliant with DATEV req
 - [Customers as debtors](docs/setup.md#customer-numbers) with a preferred number from a field of your choice; `register_customers` to prepare the initial matching.
 - [Backfill](docs/setup.md#backfill) of invoices submitted before go-live.
 - [Daily catch-up](docs/setup.md#catch-up-and-report) that re-queues submitted invoices without a DATEV Document, and the report **Sales Invoices without DATEV** with the reason for each.
-- Status indicator on the Sales Invoice form. Every failed sync rolls back completely, logs an error and leaves a comment `DATEV: <reason>` on the invoice (once per reason); the indicator turns red.
+- Status indicator on the Sales Invoice form. Every failed sync rolls back completely, logs an error and leaves a comment `DATEV: <reason>` on the invoice; the indicator turns red. Invoices that are deliberately not sent get a `DATEV note: <reason>` instead.
 - Invoices that are already in DATEV cannot be cancelled; create a Stornorechnung instead.
 - German translations for the whole UI.
 

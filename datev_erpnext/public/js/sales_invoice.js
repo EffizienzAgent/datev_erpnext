@@ -1,6 +1,8 @@
 const DATEV_COLORS = {
 	Transferred: "green",
 	Exported: "green",
+	Uploaded: "blue",
+	"No Link": "orange",
 	Pending: "orange",
 	Batched: "orange",
 	Stuck: "red",
@@ -9,6 +11,7 @@ const DATEV_COLORS = {
 
 function datev_indicator(status) {
 	if (status.error) return [__("DATEV: error"), "red"];
+	if (status.notice === "client_disabled") return [__("DATEV: client disabled"), "orange"];
 	if (!status.document) return [__("DATEV: not transferred"), "grey"];
 	const statuses = [status.document.status, ...status.bookings.map((booking) => booking.status)];
 	for (const color of ["red", "orange"]) {
@@ -17,7 +20,7 @@ function datev_indicator(status) {
 	}
 	const done = status.bookings.length && status.bookings.every((b) => DATEV_COLORS[b.status] === "green");
 	if (done) return [__("DATEV: {0}", [__(status.bookings[0].status)]), "green"];
-	return [__("DATEV: {0}", [__(status.document.status)]), "grey"];
+	return [__("DATEV: {0}", [__(status.document.status)]), DATEV_COLORS[status.document.status] || "grey"];
 }
 
 frappe.ui.form.on("Sales Invoice", {

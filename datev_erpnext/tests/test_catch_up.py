@@ -89,7 +89,7 @@ class TestCatchUp(IntegrationTestCase):
 		synced = self._submitted()
 		missing = self._submitted()
 		sync.sync_sales_invoice(synced.name)
-		missing.add_comment("Comment", "DATEV: renderer down")
+		sync._comment(missing, "renderer down")
 
 		report = run("Sales Invoices without DATEV", filters={"company": self.company})
 
@@ -97,3 +97,19 @@ class TestCatchUp(IntegrationTestCase):
 		reasons = {row["name"]: row["reason"] for row in report["result"]}
 		self.assertNotIn(synced.name, reasons)
 		self.assertEqual(reasons[missing.name], "DATEV: renderer down")
+
+	def test_catch_up_prefers_invoices_without_new_comment(self):
+		failing = self._submitted()
+		self._submitted()
+		sync._comment(failing, "renderer down")
+		self.enqueue.reset_mock()
+		with patch.object(sync, "CATCH_UP_LIMIT", 1):
+			sync.catch_up()
+		self.assertNotIn(failing.name, self._queued())
+
+	def test_report_shows_notes(self):
+		invoice = self._submitted()
+		sync._note(invoice, sync.NOT_TRANSFERRED, "no booking lines, not transferred.")
+		report = run("Sales Invoices without DATEV", filters={"company": self.company})
+		reasons = {row["name"]: row["reason"] for row in report["result"]}
+		self.assertEqual(reasons[invoice.name], "DATEV note: no booking lines, not transferred.")

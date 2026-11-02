@@ -14,7 +14,7 @@ How to connect ERPNext to DATEV with `datev_erpnext`. The DATEV side (clients, c
 
 ## DATEV Client per Company
 
-Create one **DATEV Client** per ERPNext Company and set its `company` field to the exact Company name. Only enabled clients count. Invoices of a Company without any DATEV Client are ignored. If the Company's client is disabled, the invoice gets the comment `DATEV: DATEV Client <name> is disabled, not transferred.` Two enabled clients for one Company fail the sync with an error on the invoice.
+Create one **DATEV Client** per ERPNext Company and set its `company` field to the exact Company name. Only enabled clients count. Invoices of a Company without any DATEV Client are ignored. If the Company's client is disabled, the invoice gets the comment `DATEV note: DATEV Client <name> is disabled, not transferred.` and an orange `DATEV: client disabled` indicator. Two enabled clients for one Company fail the sync with an error on the invoice.
 
 ## Settings
 
@@ -98,17 +98,17 @@ bench --site <site> execute datev_erpnext.sync.backfill --kwargs '{"company": "E
 
 Submitting a Sales Invoice on or after the sync from date queues one job per invoice (deduplicated by job id). Opening invoices (`is_opening`) and invoices without non-zero lines are skipped. The job builds the lines, ensures the debtor account, creates the document with the PDF and adds the bookings. The core takes it from there (batches, approval, export).
 
-**Status indicator.** A submitted invoice shows `DATEV: <status>` in its dashboard: grey `not transferred`, orange while pending or batched, green when transferred or exported, red when stuck or failed. It shows a red `DATEV: error` when the latest `DATEV:` comment on the invoice is newer than its DATEV Document, or there is a comment and no document.
+**Status indicator.** A submitted invoice shows `DATEV: <status>` in its dashboard: grey `not transferred`, orange while pending or batched, green when transferred or exported, red when stuck or failed. It shows a red `DATEV: error` when the latest error comment written by the sync is newer than the invoice's DATEV Document, or there is such a comment and no document. Notes (`DATEV note: ...`) never turn it red. Comments you write by hand do not count, even if they start with `DATEV:`.
 
-**Failures.** Every sync failure, whether the invoice cannot be mapped (see [rejected cases](mapping.md#rejected-cases)) or something else breaks (for example PDF rendering), rolls back completely, logs an error and adds a comment `DATEV: <reason>` on the invoice. The same comment is not added twice. Fix the cause; the daily catch-up retries the invoice, or run `backfill` for that date to retry it now. Nothing is partially created, so the invoice is picked up again.
+**Failures.** Every sync failure, whether the invoice cannot be mapped (see [rejected cases](mapping.md#rejected-cases)) or something else breaks (for example PDF rendering), rolls back completely, logs an error and adds a comment `DATEV: <reason>` on the invoice. A comment is not added again while it is still the latest DATEV comment of the invoice. Fix the cause; the daily catch-up retries the invoice, or run `backfill` for that date to retry it now. Nothing is partially created, so the invoice is picked up again.
 
-**Backdated invoices.** An invoice with a posting date before **Sync from date** is not sent. If it is submitted after the go-live, it gets the comment `DATEV: posting date before sync from date, not transferred.`, so it does not go missing silently. Decide with your tax advisor whether it belongs in DATEV; if so, send it with the backfill.
+**Backdated invoices.** An invoice with a posting date before **Sync from date** is not sent. If it is submitted after the go-live, it gets the comment `DATEV note: posting date before sync from date, not transferred.`, so it does not go missing silently. The indicator stays grey (`not transferred`). Decide with your tax advisor whether it belongs in DATEV; if so, send it with the backfill.
 
 ### Catch-up and report
 
-A daily job queues every submitted, non-opening invoice of a Company with an enabled DATEV Client that has a posting date on or after **Sync from date** and no DATEV Document, at most 500 per run, oldest first. It catches invoices whose job was lost or failed for a temporary reason. An invoice that keeps failing is retried every day; the same failure comment is not repeated.
+A daily job queues every submitted, non-opening invoice of a Company with an enabled DATEV Client that has a posting date on or after **Sync from date** and no DATEV Document, at most 500 per run. Invoices without a DATEV comment since their last change come first, then by posting date, so invoices that keep failing do not block the others. It catches invoices whose job was lost or failed for a temporary reason. An invoice that keeps failing is retried every day; its failure comment is not repeated.
 
-The script report **Sales Invoices without DATEV** (DATEV User, DATEV Manager, Accounts Manager) lists the same invoices for all Companies with a DATEV Client, with the latest `DATEV:` comment as the reason. Filter by Company. Check it regularly; an empty report means every invoice since the go-live is in DATEV.
+The script report **Sales Invoices without DATEV** (DATEV User, DATEV Manager, Accounts Manager) lists the same invoices for all Companies with a DATEV Client, with the latest error or note written by the sync as the reason. Filter by Company. Check it regularly; an empty report means every invoice since the go-live is in DATEV.
 
 ## Cancelling
 

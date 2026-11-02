@@ -139,8 +139,6 @@ class TestLines(IntegrationTestCase):
 
 	def test_rate_match_ok(self):
 		invoice = make_invoice(self.company, [("SERVICE", 1, 100)])
-		invoice.append_taxes_from_master()
-		invoice.save()
 		self.assertFalse(invoice.items[0].item_tax_template)
 		self.assertEqual(invoice.base_grand_total, 119)
 		self.assertEqual(sales_invoice_lines(invoice), [self._rent("119.00", "S")])
@@ -155,4 +153,48 @@ class TestLines(IntegrationTestCase):
 		invoice = make_invoice(self.company, [("MIETE", 1, 100), ("ZUB", -1, 100)])
 		self.assertEqual(invoice.base_grand_total, 0)
 		with self.assertRaisesRegex(frappe.ValidationError, "total of zero"):
+			sales_invoice_lines(invoice)
+
+	def _without_item_template_taxes(self):
+		setting = ("Accounts Settings", "add_taxes_from_item_tax_template")
+		self.addCleanup(frappe.db.set_single_value, *setting, frappe.db.get_single_value(*setting))
+		frappe.db.set_single_value(*setting, 0)
+
+	def test_template_with_accounts_not_on_invoice(self):
+		self._without_item_template_taxes()
+		template = f"DE 19 % alle Konten - {self.abbr}"
+		invoice = make_invoice(self.company, [("GERAET", 1, 100), ("VERS", 1, 29.75)])
+		self.assertEqual(len(invoice.taxes), 1)
+		self.assertEqual(invoice.base_grand_total, 148.75)
+		self.assertEqual(
+			sales_invoice_lines(invoice),
+			[
+				self._insurance("29.75", "S"),
+				Line(f"4400:{template}:19", 4400, Decimal("119.00"), 19, template, "S"),
+			],
+		)
+
+	def test_template_with_accounts_not_on_invoice_mismatch(self):
+		self._without_item_template_taxes()
+		invoice = make_invoice(self.company, [("GERAET", 1, 100)])
+		for row in invoice.item_wise_tax_details:
+			row.rate, row.amount = 0, 0
+		invoice.base_grand_total = invoice.base_rounded_total = 100
+		with self.assertRaisesRegex(frappe.ValidationError, "expects a rate of 19% but 0% is applied"):
+			sales_invoice_lines(invoice)
+
+	def test_template_without_any_account_on_invoice(self):
+		self._without_item_template_taxes()
+		invoice = make_invoice(self.company, [("MIETE", 1, 100)])
+		invoice.taxes = []
+		invoice.taxes_and_charges = None
+		invoice.save()
+		self.assertEqual(invoice.base_grand_total, 100)
+		with self.assertRaisesRegex(frappe.ValidationError, "None of the tax accounts"):
+			sales_invoice_lines(invoice)
+
+	def test_unsupported_charge_type_rejected(self):
+		invoice = make_invoice(self.company, [("MIETE", 1, 100)])
+		invoice.taxes[0].charge_type = "Actual"
+		with self.assertRaisesRegex(frappe.ValidationError, "charge type"):
 			sales_invoice_lines(invoice)
