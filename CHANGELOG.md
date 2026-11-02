@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/EffizienzAgent/datev_erpnext/compare/v0.1.0...v0.2.0) (2026-11-02)
+
+
+### Features
+
+* v0.2 – strict tax checks, catch-up, report, shorter locks ([#2](https://github.com/EffizienzAgent/datev_erpnext/issues/2)) ([65f78d0](https://github.com/EffizienzAgent/datev_erpnext/commit/65f78d035c4fc1b250286e5df7318d37509383a7))
+
 ## [0.1.0](https://github.com/EffizienzAgent/datev_erpnext/compare/v0.1.0...v0.1.0) (2026-11-02)
 
 
