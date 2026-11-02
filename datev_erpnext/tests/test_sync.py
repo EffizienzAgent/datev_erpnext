@@ -45,6 +45,20 @@ class TestSync(IntegrationTestCase):
 	def _set_setting(self, field, value):
 		frappe.db.set_single_value("DATEV ERPNext Settings", field, value)
 
+	def _sync_failing(self, name):
+		frappe.db.savepoint("before_sync")
+		real_rollback = frappe.db.rollback
+		with (
+			patch(
+				"frappe.db.rollback", side_effect=lambda: real_rollback(save_point="before_sync")
+			) as rollback,
+			patch("frappe.db.commit") as commit,
+		):
+			result = sync.sync_sales_invoice(name)
+		rollback.assert_called_once_with()
+		commit.assert_called_once_with()
+		return result
+
 	def _sync_jobs(self):
 		return [call for call in self.enqueue.call_args_list if call.args and call.args[0] == SYNC_JOB]
 
@@ -59,7 +73,13 @@ class TestSync(IntegrationTestCase):
 		self.assertEqual(len(self._sync_jobs()), 1)
 		self.assertEqual(
 			self._sync_jobs()[0].kwargs,
-			{"name": invoice.name, "queue": "short", "enqueue_after_commit": True},
+			{
+				"name": invoice.name,
+				"job_id": f"datev-sync-{invoice.name}",
+				"deduplicate": True,
+				"queue": "short",
+				"enqueue_after_commit": True,
+			},
 		)
 
 	def test_submit_skipped_when_disabled(self):
@@ -71,9 +91,40 @@ class TestSync(IntegrationTestCase):
 	def test_submit_never_fails_on_sync_errors(self):
 		make_client(self.company)
 		make_client(self.company)
+		frappe.local.message_log = []
 		invoice = self._submitted()
 		self.assertEqual(invoice.docstatus, 1)
 		self.assertEqual(self._sync_jobs(), [])
+		self.assertNotIn("DATEV Client", str(frappe.local.message_log))
+
+	def test_failed_booking_rolls_back_document(self):
+		make_client(self.company)
+		invoice = self._submitted()
+		self.enqueue.reset_mock()
+		calls = []
+		real_add_booking = sync.add_booking
+
+		def add_booking(*args, **kwargs):
+			calls.append(args)
+			if len(calls) == 2:
+				frappe.throw("booking rejected")
+			return real_add_booking(*args, **kwargs)
+
+		with patch.object(sync, "add_booking", side_effect=add_booking):
+			self.assertIsNone(self._sync_failing(invoice.name))
+
+		self.assertEqual(len(calls), 2)
+		self.assertFalse(frappe.db.exists("DATEV Document", {"source_name": invoice.name}))
+		self.assertFalse(frappe.db.count("DATEV Booking", {"document_field_1": invoice.name}))
+		uploads = [call for call in self.enqueue.call_args_list if call.args[0] == "datev.documents.upload"]
+		self.assertEqual(len(uploads), 1)
+		self.assertTrue(uploads[0].kwargs["enqueue_after_commit"])
+		comments = frappe.get_all(
+			"Comment",
+			filters={"reference_doctype": "Sales Invoice", "reference_name": invoice.name},
+			pluck="content",
+		)
+		self.assertIn("DATEV: booking rejected", comments)
 
 	def test_sync_creates_document_and_bookings(self):
 		make_client(self.company)
@@ -160,7 +211,7 @@ class TestSync(IntegrationTestCase):
 		invoice.save()
 		invoice.submit()
 
-		self.assertIsNone(sync.sync_sales_invoice(invoice.name))
+		self.assertIsNone(self._sync_failing(invoice.name))
 		self.assertFalse(frappe.db.exists("DATEV Document", {"source_name": invoice.name}))
 		comments = frappe.get_all(
 			"Comment",
@@ -183,8 +234,23 @@ class TestSync(IntegrationTestCase):
 
 		self.assertEqual(count, 1)
 		self.assertEqual(len(self._sync_jobs()), 1)
-		self.assertEqual(self._sync_jobs()[0].kwargs, {"name": missing.name, "queue": "long"})
+		self.assertEqual(
+			self._sync_jobs()[0].kwargs,
+			{
+				"name": missing.name,
+				"job_id": f"datev-sync-{missing.name}",
+				"deduplicate": True,
+				"queue": "long",
+			},
+		)
 		self.assertEqual(sync.backfill(self.company, "2000-01-01", "2000-12-31"), 0)
+
+	def test_backfill_requires_datev_manager(self):
+		make_client(self.company)
+		frappe.set_user("Guest")
+		self.addCleanup(frappe.set_user, "Administrator")
+		with self.assertRaises(frappe.PermissionError):
+			sync.backfill(self.company, "2000-01-01")
 
 	def test_datev_status(self):
 		make_client(self.company)

@@ -15,11 +15,17 @@ def source_key(name: str) -> str:
 	return f"Sales Invoice:{name}"
 
 
+def _enqueue(name: str, **kwargs):
+	frappe.enqueue(SYNC_JOB, name=name, job_id=f"datev-sync-{name}", deduplicate=True, **kwargs)
+
+
 def on_submit(doc, method=None):
+	messages = len(frappe.local.message_log)
 	try:
 		if frappe.get_single(SETTINGS).enabled and client_for(doc.company):
-			frappe.enqueue(SYNC_JOB, name=doc.name, queue="short", enqueue_after_commit=True)
+			_enqueue(doc.name, queue="short", enqueue_after_commit=True)
 	except Exception:
+		frappe.local.message_log = frappe.local.message_log[:messages]
 		frappe.log_error(f"DATEV sync could not be queued for {doc.name}")
 
 
@@ -27,14 +33,14 @@ def sync_sales_invoice(name: str) -> str | None:
 	invoice = frappe.get_doc("Sales Invoice", name)
 	if invoice.docstatus != 1:
 		return None
-	frappe.db.savepoint("datev_sync")
 	try:
 		client = client_for(invoice.company)
 		return _sync(client, invoice) if client else None
 	except frappe.ValidationError as error:
-		frappe.db.rollback(save_point="datev_sync")
+		frappe.db.rollback()
 		frappe.log_error(f"DATEV sync failed for {name}")
 		invoice.add_comment("Comment", _("DATEV: {0}").format(error))
+		frappe.db.commit()
 		return None
 
 
@@ -84,7 +90,7 @@ def _posting_text(invoice) -> str:
 		frappe.throw(_("The posting text template {0} is invalid").format(template), frappe.ValidationError)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def backfill(company: str, from_date: str, to_date: str | None = None) -> int:
 	frappe.only_for("DATEV Manager")
 	if not client_for(company):
@@ -108,7 +114,7 @@ def backfill(company: str, from_date: str, to_date: str | None = None) -> int:
 	)
 	missing = [name for name in names if name not in synced]
 	for name in missing:
-		frappe.enqueue(SYNC_JOB, name=name, queue="long")
+		_enqueue(name, queue="long")
 	return len(missing)
 
 

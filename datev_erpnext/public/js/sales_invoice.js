@@ -22,8 +22,11 @@ function datev_indicator(status) {
 frappe.ui.form.on("Sales Invoice", {
 	refresh(frm) {
 		if (frm.doc.docstatus !== 1) return;
-		frappe
-			.call("datev_erpnext.sync.datev_status", { name: frm.doc.name })
-			.then(({ message }) => frm.dashboard.add_indicator(...datev_indicator(message || {})));
+		frappe.call({
+			method: "datev_erpnext.sync.datev_status",
+			args: { name: frm.doc.name },
+			error: () => {},
+			callback: ({ message }) => frm.dashboard.add_indicator(...datev_indicator(message || {})),
+		});
 	},
 });
