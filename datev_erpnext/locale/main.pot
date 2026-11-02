@@ -1,11 +1,11 @@
 # Translations template for DATEV for ERPNext.
 # Copyright (C) 2026 EffizienzAgent (Tobias Mende)
 # This file is distributed under the same license as the DATEV for ERPNext project.
-# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+# EffizienzAgent, 2026.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: DATEV for ERPNext VERSION\n"
+"Project-Id-Version: DATEV for ERPNext\n"
 "Report-Msgid-Bugs-To: oss@effizienzagent.de\n"
 "POT-Creation-Date: 2026-11-02 13:27+0000\n"
 "PO-Revision-Date: 2026-11-02 13:27+0000\n"

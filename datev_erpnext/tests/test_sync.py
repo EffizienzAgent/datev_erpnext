@@ -96,6 +96,13 @@ class TestSync(IntegrationTestCase):
 		self.assertEqual(invoice.docstatus, 1)
 		self.assertEqual(self._sync_jobs(), [])
 		self.assertNotIn("DATEV Client", str(frappe.local.message_log))
+		comments = frappe.get_all(
+			"Comment",
+			filters={"reference_doctype": "Sales Invoice", "reference_name": invoice.name},
+			pluck="content",
+		)
+		self.assertEqual(len(comments), 1)
+		self.assertIn("DATEV: More than one enabled DATEV Client", comments[0])
 
 	def test_failed_booking_rolls_back_document(self):
 		make_client(self.company)

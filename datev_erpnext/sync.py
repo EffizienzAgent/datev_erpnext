@@ -24,9 +24,17 @@ def on_submit(doc, method=None):
 	try:
 		if frappe.get_single(SETTINGS).enabled and client_for(doc.company):
 			_enqueue(doc.name, queue="short", enqueue_after_commit=True)
-	except Exception:
+	except Exception as error:
 		frappe.local.message_log = frappe.local.message_log[:messages]
 		frappe.log_error(f"DATEV sync could not be queued for {doc.name}")
+		_comment(doc, error)
+
+
+def _comment(doc, error):
+	try:
+		doc.add_comment("Comment", _("DATEV: {0}").format(error))
+	except Exception:
+		frappe.log_error(f"DATEV comment could not be added for {doc.name}")
 
 
 def before_cancel(doc, method=None):

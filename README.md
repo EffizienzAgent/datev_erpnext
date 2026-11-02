@@ -19,10 +19,10 @@ datev_erpnext is a technical tool. It does not make you compliant with DATEV req
 - Sync on submit as a background job, idempotent: re-running never creates a second document or booking.
 - [One booking per revenue account and tax code](docs/mapping.md#lines), gross, with the rounding difference on the largest line.
 - Stornorechnungen (ERPNext returns) with the opposite debit/credit side.
-- Document image from a print format or the latest attached PDF; with `eu_einvoice` installed, the e-invoice XML is embedded. A hook (`datev_erpnext_document_image`) replaces the image source.
+- Document image from a print format or the latest attached PDF; with `eu_einvoice` installed, the e-invoice XML is embedded (only with the "Print format" source). A hook (`datev_erpnext_document_image`) replaces the image source.
 - [Customers as debtors](docs/setup.md#customer-numbers) with a preferred number from a field of your choice; `register_customers` to prepare the initial matching.
 - [Backfill](docs/setup.md#backfill) of invoices submitted before go-live.
-- Status indicator on the Sales Invoice form and a comment on the invoice when a sync fails.
+- Status indicator on the Sales Invoice form and a comment on the invoice when its data cannot be mapped. Other failures (for example PDF rendering) appear only in the Error Log and as failed background jobs.
 - Invoices that are already in DATEV cannot be cancelled; create a Stornorechnung instead.
 - German translations for the whole UI.
 

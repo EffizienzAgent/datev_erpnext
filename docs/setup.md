@@ -38,7 +38,7 @@ The first source that returns a file wins: hook `datev_erpnext_document_image` (
 ## Going live
 
 1. Install, set `host_name`, create and test the DATEV Client with a test mandate, fill the settings.
-2. Run `register_customers` for the Company. It creates the party accounts of all customers with submitted invoices (and all customers with a number in the customer number field).
+2. Run `register_customers` for the Company. It creates the party accounts of all customers with submitted invoices (and all customers with a number in the customer number field). Disabled customers are skipped.
 
    ```
    bench --site <site> execute datev_erpnext.parties.register_customers --kwargs '{"company": "Example GmbH"}'
@@ -61,7 +61,7 @@ Submitting a Sales Invoice queues one job per invoice (deduplicated by job id). 
 
 **Status indicator.** A submitted invoice shows `DATEV: <status>` in its dashboard: grey `not transferred`, orange while pending or batched, green when transferred or exported, red when stuck or failed.
 
-**Failures.** If an invoice cannot be mapped (see [rejected cases](mapping.md#rejected-cases)), the sync rolls back completely, logs an error and adds a comment `DATEV: <reason>` on the invoice. Fix the cause and run `backfill` for that date; nothing is partially created, so the invoice is picked up again.
+**Failures.** Other failures, such as PDF rendering errors, show up only in the Error Log and as failed background jobs. If an invoice cannot be mapped (see [rejected cases](mapping.md#rejected-cases)), the sync rolls back completely, logs an error and adds a comment `DATEV: <reason>` on the invoice. Fix the cause and run `backfill` for that date; nothing is partially created, so the invoice is picked up again.
 
 ## Cancelling
 
