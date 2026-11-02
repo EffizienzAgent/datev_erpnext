@@ -1,0 +1,86 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "Europe/Berlin",
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Frappe commit CI tests against",
+      "managerFilePatterns": [
+        "/^\\.github/versions\\.env$/"
+      ],
+      "matchStrings": [
+        "FRAPPE_BRANCH=(?<currentValue>\\S+)\\nFRAPPE_COMMIT=(?<currentDigest>[0-9a-f]{40})"
+      ],
+      "datasourceTemplate": "git-refs",
+      "depNameTemplate": "frappe",
+      "packageNameTemplate": "https://github.com/frappe/frappe"
+    },
+    {
+      "customType": "regex",
+      "description": "erpnext commit CI tests against",
+      "managerFilePatterns": [
+        "/^\\.github/versions\\.env$/"
+      ],
+      "matchStrings": [
+        "ERPNEXT_BRANCH=(?<currentValue>\\S+)\\nERPNEXT_COMMIT=(?<currentDigest>[0-9a-f]{40})"
+      ],
+      "datasourceTemplate": "git-refs",
+      "depNameTemplate": "erpnext",
+      "packageNameTemplate": "https://github.com/frappe/erpnext"
+    },
+    {
+      "customType": "regex",
+      "description": "datev commit CI tests against",
+      "managerFilePatterns": [
+        "/^\\.github/versions\\.env$/"
+      ],
+      "matchStrings": [
+        "DATEV_BRANCH=(?<currentValue>\\S+)\\nDATEV_COMMIT=(?<currentDigest>[0-9a-f]{40})"
+      ],
+      "datasourceTemplate": "git-refs",
+      "depNameTemplate": "datev",
+      "packageNameTemplate": "https://github.com/EffizienzAgent/datev"
+    },
+    {
+      "customType": "regex",
+      "description": "eu_einvoice commit CI tests against",
+      "managerFilePatterns": [
+        "/^\\.github/versions\\.env$/"
+      ],
+      "matchStrings": [
+        "EU_EINVOICE_BRANCH=(?<currentValue>\\S+)\\nEU_EINVOICE_COMMIT=(?<currentDigest>[0-9a-f]{40})"
+      ],
+      "datasourceTemplate": "git-refs",
+      "depNameTemplate": "eu_einvoice",
+      "packageNameTemplate": "https://github.com/alyf-de/eu_einvoice"
+    },
+    {
+      "customType": "regex",
+      "description": "frappe-bench version CI installs",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "pip install (?<depName>frappe-bench)==(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "pypi"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "frappe",
+        "erpnext",
+        "eu_einvoice"
+      ],
+      "automerge": false
+    }
+  ]
+}
