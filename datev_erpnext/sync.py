@@ -83,20 +83,32 @@ def before_cancel(doc, method=None):
 		discard_document(key)
 
 
+def _should_sync(invoice, from_backfill: bool) -> bool:
+	if invoice.docstatus != 1 or _is_opening(invoice):
+		return False
+	return from_backfill or _in_sync_period(invoice)
+
+
 def sync_sales_invoice(name: str, from_backfill: bool = False) -> str | None:
 	if not frappe.get_single(SETTINGS).enabled:
 		return None
-	invoice = frappe.get_doc("Sales Invoice", name, for_update=True)
-	if invoice.docstatus != 1 or _is_opening(invoice):
-		return None
-	if not from_backfill and not _in_sync_period(invoice):
+	invoice = frappe.get_doc("Sales Invoice", name)
+	if not _should_sync(invoice, from_backfill):
 		return None
 	try:
 		client = client_for(invoice.company)
 		if not client:
 			_comment_if_client_disabled(invoice)
 			return None
-		return _sync(client, invoice)
+		if not sales_invoice_lines(invoice):
+			return None
+		image = document_image(invoice)
+		locked = frappe.get_doc("Sales Invoice", name, for_update=True)
+		if not _should_sync(locked, from_backfill):
+			return None
+		if locked.modified != invoice.modified:
+			image = document_image(locked)
+		return _sync(client, locked, image)
 	except Exception as error:
 		frappe.db.rollback()
 		frappe.log_error(f"DATEV sync failed for {name}")
@@ -105,14 +117,14 @@ def sync_sales_invoice(name: str, from_backfill: bool = False) -> str | None:
 		return None
 
 
-def _sync(client, invoice) -> str | None:
+def _sync(client, invoice, image: tuple[str, bytes]) -> str | None:
 	lines = sales_invoice_lines(invoice)
 	if not lines:
 		return None
 	_check_tax_keys(client, lines)
 	posting_text = _posting_text(invoice)
 	party = party_account_for(client, invoice.customer)
-	file_name, content = document_image(invoice)
+	file_name, content = image
 	document = upsert_document(
 		client.name,
 		source_key(invoice.name),

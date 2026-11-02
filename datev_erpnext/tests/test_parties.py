@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_field
 from frappe.tests import IntegrationTestCase
@@ -66,3 +68,11 @@ class TestParties(IntegrationTestCase):
 		frappe.db.delete("DATEV Party Account", {"client": self.client.name})
 		make_invoice(self.company, [("MIETE", 1, 100)]).submit()
 		self.assertEqual(register_customers(self.company), 1)
+
+	def test_party_lock_taken(self):
+		with patch.object(frappe.db, "get_value", wraps=frappe.db.get_value) as get_value:
+			party_account_for(self.client, self.customer)
+		get_value.assert_any_call("Customer", self.customer, "name", for_update=True)
+
+	def test_register_customers_post_only(self):
+		self.assertEqual(frappe.allowed_http_methods_for_whitelisted_func[register_customers], ["POST"])

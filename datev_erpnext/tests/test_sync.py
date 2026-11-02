@@ -444,3 +444,56 @@ class TestSync(IntegrationTestCase):
 		self.assertIsNone(sync.sync_sales_invoice(invoice.name))
 		self.assertIsNone(sync.sync_sales_invoice(invoice.name, from_backfill=True))
 		self.assertFalse(frappe.db.exists("DATEV Document", {"source_name": invoice.name}))
+
+	def test_pdf_rendered_before_lock(self):
+		make_client(self.company)
+		invoice = self._submitted()
+		calls = []
+		real_get_doc, real_image = frappe.get_doc, sync.document_image
+
+		def get_doc(*args, **kwargs):
+			if kwargs.get("for_update"):
+				calls.append("lock")
+			return real_get_doc(*args, **kwargs)
+
+		def document_image(doc):
+			calls.append("render")
+			return real_image(doc)
+
+		with (
+			patch("frappe.get_doc", side_effect=get_doc),
+			patch.object(sync, "document_image", side_effect=document_image),
+		):
+			self.assertTrue(sync.sync_sales_invoice(invoice.name))
+		self.assertEqual(calls[:2], ["render", "lock"])
+		self.assertEqual(calls.count("render"), 1)
+
+	def test_rerendered_when_invoice_changed_meanwhile(self):
+		make_client(self.company)
+		invoice = self._submitted()
+		real_image = sync.document_image
+		rendered = []
+
+		def document_image(doc):
+			if not rendered:
+				frappe.db.set_value("Sales Invoice", doc.name, "remarks", "paid", update_modified=True)
+			rendered.append(str(doc.modified))
+			return real_image(doc)
+
+		with patch.object(sync, "document_image", side_effect=document_image):
+			self.assertTrue(sync.sync_sales_invoice(invoice.name))
+		self.assertEqual(len(rendered), 2)
+		self.assertNotEqual(rendered[0], rendered[1])
+
+	def test_cancelled_while_rendering_is_skipped(self):
+		make_client(self.company)
+		invoice = self._submitted()
+		real_image = sync.document_image
+
+		def document_image(doc):
+			frappe.db.set_value("Sales Invoice", doc.name, "docstatus", 2)
+			return real_image(doc)
+
+		with patch.object(sync, "document_image", side_effect=document_image):
+			self.assertIsNone(sync.sync_sales_invoice(invoice.name))
+		self.assertFalse(frappe.db.exists("DATEV Document", {"source_name": invoice.name}))
