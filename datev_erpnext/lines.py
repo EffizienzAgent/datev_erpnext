@@ -87,6 +87,7 @@ def sales_invoice_lines(invoice) -> list[Line]:
 				side if amount * sign >= 0 else _opposite(side),
 			)
 			for (number, code, rate), amount in totals.items()
+			if amount
 		),
 		key=lambda line: line.line_key,
 	)

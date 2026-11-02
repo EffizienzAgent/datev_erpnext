@@ -9,9 +9,10 @@ def _preferred_number(customer: str) -> int | None:
 	field = frappe.db.get_single_value("DATEV ERPNext Settings", "customer_number_field")
 	value = frappe.db.get_value("Customer", customer, field) if field else None
 	try:
-		return int(str(value).strip())
+		number = int(str(value).strip())
 	except TypeError, ValueError:
 		return None
+	return number if number > 0 else None
 
 
 def party_account_for(client, customer: str) -> str:

@@ -17,6 +17,7 @@ class TestCancel(IntegrationTestCase):
 			patcher = patch(target, return_value=minimal_pdf() if target == "frappe.get_print" else None)
 			patcher.start()
 			self.addCleanup(patcher.stop)
+		frappe.db.set_single_value("DATEV ERPNext Settings", "sync_from_date", "2000-01-01")
 
 	def _synced_invoice(self):
 		make_client(self.company)
@@ -50,3 +51,11 @@ class TestCancel(IntegrationTestCase):
 		frappe.db.set_single_value("DATEV ERPNext Settings", "enabled", 0)
 		invoice.cancel()
 		self.assertEqual(frappe.db.get_value("DATEV Document", document, "status"), "Discarded")
+
+	def test_cancel_locks_datev_document(self):
+		invoice, _ = self._synced_invoice()
+		with patch.object(frappe.db, "get_value", wraps=frappe.db.get_value) as get_value:
+			invoice.cancel()
+		get_value.assert_any_call(
+			"DATEV Document", {"source_key": f"Sales Invoice:{invoice.name}"}, "name", for_update=True
+		)

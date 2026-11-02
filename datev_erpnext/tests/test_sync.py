@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
+from frappe.utils import add_days, nowdate
 
 from datev_erpnext import sync
 from datev_erpnext.tests.factories import make_client, make_company, make_invoice
@@ -41,6 +42,7 @@ class TestSync(IntegrationTestCase):
 		enqueue = patch("frappe.enqueue")
 		self.enqueue = enqueue.start()
 		self.addCleanup(enqueue.stop)
+		self._set_setting("sync_from_date", "2000-01-01")
 
 	def _set_setting(self, field, value):
 		frappe.db.set_single_value("DATEV ERPNext Settings", field, value)
@@ -66,6 +68,13 @@ class TestSync(IntegrationTestCase):
 		invoice = make_invoice(self.company, items, **overrides)
 		invoice.submit()
 		return invoice
+
+	def _comments(self, invoice):
+		return frappe.get_all(
+			"Comment",
+			filters={"reference_doctype": "Sales Invoice", "reference_name": invoice.name},
+			pluck="content",
+		)
 
 	def test_submit_enqueues(self):
 		make_client(self.company)
@@ -248,6 +257,7 @@ class TestSync(IntegrationTestCase):
 				"job_id": f"datev-sync-{missing.name}",
 				"deduplicate": True,
 				"queue": "long",
+				"from_backfill": True,
 			},
 		)
 		self.assertEqual(sync.backfill(self.company, "2000-01-01", "2000-12-31"), 0)
@@ -278,3 +288,101 @@ class TestSync(IntegrationTestCase):
 		self.addCleanup(frappe.set_user, "Administrator")
 		with self.assertRaises(frappe.PermissionError):
 			sync.datev_status(invoice.name)
+
+	def test_sync_locks_invoice(self):
+		make_client(self.company)
+		invoice = self._submitted()
+		with patch("frappe.get_doc", wraps=frappe.get_doc) as get_doc:
+			sync.sync_sales_invoice(invoice.name)
+		get_doc.assert_any_call("Sales Invoice", invoice.name, for_update=True)
+
+	def test_queued_sync_after_cancel_is_skipped(self):
+		make_client(self.company)
+		invoice = self._submitted()
+		invoice.cancel()
+		self.assertIsNone(sync.sync_sales_invoice(invoice.name))
+		self.assertFalse(frappe.db.exists("DATEV Document", {"source_name": invoice.name}))
+
+	def test_zero_amount_line_is_dropped(self):
+		make_client(self.company)
+		invoice = self._submitted([*MIXED, ("ZUB", 1, 0)])
+		document = sync.sync_sales_invoice(invoice.name)
+		self.assertEqual([row.contra_account for row in bookings(document)], [4100, 4400])
+
+	def test_zero_total_invoice_is_skipped(self):
+		make_client(self.company)
+		invoice = self._submitted([("ZUB", 1, 0)])
+		self.assertEqual(invoice.base_grand_total, 0)
+		self.assertIsNone(sync.sync_sales_invoice(invoice.name))
+		self.assertFalse(frappe.db.exists("DATEV Document", {"source_name": invoice.name}))
+
+	def test_opening_invoice_is_skipped(self):
+		make_client(self.company)
+		invoice = self._submitted()
+		invoice.db_set("is_opening", "Yes")
+		self.enqueue.reset_mock()
+
+		sync.on_submit(invoice)
+		self.assertEqual(self._sync_jobs(), [])
+		self.assertIsNone(sync.sync_sales_invoice(invoice.name))
+		self.assertIsNone(sync.sync_sales_invoice(invoice.name, from_backfill=True))
+		self.assertFalse(frappe.db.exists("DATEV Document", {"source_name": invoice.name}))
+		self.assertEqual(sync.backfill(self.company, invoice.posting_date), 0)
+
+	def test_unexpected_error_rolls_back_and_comments(self):
+		make_client(self.company)
+		invoice = self._submitted()
+		with patch.object(sync, "document_image", side_effect=RuntimeError("renderer down")):
+			self.assertIsNone(self._sync_failing(invoice.name))
+		self.assertFalse(frappe.db.exists("DATEV Document", {"source_name": invoice.name}))
+		self.assertIn("DATEV: renderer down", self._comments(invoice))
+
+	def test_tax_code_without_tax_key_is_rejected(self):
+		make_client(self.company, tax_keys=[{"tax_code": f"DE 19 % - {self._abbr()}", "bu_key": ""}])
+		invoice = self._submitted()
+		self.assertIsNone(self._sync_failing(invoice.name))
+		self.assertFalse(frappe.db.exists("DATEV Document", {"source_name": invoice.name}))
+		comments = self._comments(invoice)
+		self.assertEqual(len(comments), 1)
+		self.assertIn(f"DE steuerfrei - {self._abbr()}", comments[0])
+		self.assertIn("Add it to the DATEV Client", comments[0])
+
+	def _abbr(self):
+		return frappe.db.get_value("Company", self.company, "abbr")
+
+	def test_submit_skipped_without_sync_from_date(self):
+		make_client(self.company)
+		self._set_setting("sync_from_date", None)
+		invoice = self._submitted()
+		self.assertEqual(self._sync_jobs(), [])
+		self.assertIsNone(sync.sync_sales_invoice(invoice.name))
+		self.assertFalse(frappe.db.exists("DATEV Document", {"source_name": invoice.name}))
+
+	def test_submit_skipped_before_sync_from_date(self):
+		make_client(self.company)
+		self._set_setting("sync_from_date", add_days(nowdate(), 1))
+		invoice = self._submitted()
+		self.assertEqual(self._sync_jobs(), [])
+		self.assertIsNone(sync.sync_sales_invoice(invoice.name))
+
+	def test_submit_on_sync_from_date_enqueues(self):
+		make_client(self.company)
+		self._set_setting("sync_from_date", nowdate())
+		self._submitted()
+		self.assertEqual(len(self._sync_jobs()), 1)
+
+	def test_backfill_ignores_sync_from_date(self):
+		make_client(self.company)
+		self._set_setting("sync_from_date", None)
+		invoice = self._submitted()
+		self.assertEqual(sync.backfill(self.company, invoice.posting_date), 1)
+		self.assertTrue(sync.sync_sales_invoice(invoice.name, from_backfill=True))
+
+	def test_backfill_requires_enabled(self):
+		make_client(self.company)
+		self._submitted()
+		self.enqueue.reset_mock()
+		self._set_setting("enabled", 0)
+		with self.assertRaises(frappe.ValidationError):
+			sync.backfill(self.company, "2000-01-01")
+		self.assertEqual(self._sync_jobs(), [])

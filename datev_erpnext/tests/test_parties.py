@@ -43,7 +43,7 @@ class TestParties(IntegrationTestCase):
 		self.assertEqual(account.vat_id, TAX_ID)
 
 	def test_missing_number_field_value(self):
-		for value in ("", None, "abc"):
+		for value in ("", None, "abc", "0", "-5"):
 			self._set_number(value)
 			name = party_account_for(self.client, self.customer)
 			self.assertFalse(frappe.db.get_value("DATEV Party Account", name, "preferred_number"))

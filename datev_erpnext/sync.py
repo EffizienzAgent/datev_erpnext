@@ -1,6 +1,7 @@
 import frappe
 from datev.intake import add_booking, discard_document, upsert_document
 from frappe import _
+from frappe.utils import getdate
 
 from datev_erpnext.clients import client_for
 from datev_erpnext.images import document_image
@@ -19,10 +20,24 @@ def _enqueue(name: str, **kwargs):
 	frappe.enqueue(SYNC_JOB, name=name, job_id=f"datev-sync-{name}", deduplicate=True, **kwargs)
 
 
+def _in_sync_period(invoice) -> bool:
+	sync_from_date = frappe.get_single(SETTINGS).sync_from_date
+	return bool(sync_from_date) and getdate(invoice.posting_date) >= getdate(sync_from_date)
+
+
+def _is_opening(invoice) -> bool:
+	return invoice.is_opening == "Yes"
+
+
 def on_submit(doc, method=None):
 	messages = len(frappe.local.message_log)
 	try:
-		if frappe.get_single(SETTINGS).enabled and client_for(doc.company):
+		if (
+			frappe.get_single(SETTINGS).enabled
+			and not _is_opening(doc)
+			and _in_sync_period(doc)
+			and client_for(doc.company)
+		):
 			_enqueue(doc.name, queue="short", enqueue_after_commit=True)
 	except Exception as error:
 		frappe.local.message_log = frappe.local.message_log[:messages]
@@ -39,27 +54,32 @@ def _comment(doc, error):
 
 def before_cancel(doc, method=None):
 	key = source_key(doc.name)
-	if frappe.db.exists("DATEV Document", {"source_key": key}):
+	if frappe.db.get_value("DATEV Document", {"source_key": key}, "name", for_update=True):
 		discard_document(key)
 
 
-def sync_sales_invoice(name: str) -> str | None:
-	invoice = frappe.get_doc("Sales Invoice", name)
-	if invoice.docstatus != 1:
+def sync_sales_invoice(name: str, from_backfill: bool = False) -> str | None:
+	invoice = frappe.get_doc("Sales Invoice", name, for_update=True)
+	if invoice.docstatus != 1 or _is_opening(invoice):
+		return None
+	if not from_backfill and not _in_sync_period(invoice):
 		return None
 	try:
 		client = client_for(invoice.company)
 		return _sync(client, invoice) if client else None
-	except frappe.ValidationError as error:
+	except Exception as error:
 		frappe.db.rollback()
 		frappe.log_error(f"DATEV sync failed for {name}")
-		invoice.add_comment("Comment", _("DATEV: {0}").format(error))
+		_comment(invoice, error)
 		frappe.db.commit()
 		return None
 
 
-def _sync(client, invoice) -> str:
+def _sync(client, invoice) -> str | None:
 	lines = sales_invoice_lines(invoice)
+	if not lines:
+		return None
+	_check_tax_keys(client, lines)
 	posting_text = _posting_text(invoice)
 	party = party_account_for(client, invoice.customer)
 	file_name, content = document_image(invoice)
@@ -94,6 +114,18 @@ def _sync(client, invoice) -> str:
 	return document
 
 
+def _check_tax_keys(client, lines):
+	known = {row.tax_code for row in client.tax_keys}
+	for line in lines:
+		if line.tax_code and line.tax_code not in known:
+			frappe.throw(
+				_(
+					"Tax code {0} has no row in the tax keys of DATEV Client {1}. Add it to the DATEV Client's tax keys; leave the BU key empty for automatic accounts."
+				).format(line.tax_code, client.name),
+				frappe.ValidationError,
+			)
+
+
 def _posting_text(invoice) -> str:
 	template = frappe.get_single(SETTINGS).posting_text_template or ""
 	try:
@@ -107,13 +139,15 @@ def _posting_text(invoice) -> str:
 @frappe.whitelist(methods=["POST"])
 def backfill(company: str, from_date: str, to_date: str | None = None) -> int:
 	frappe.only_for("DATEV Manager")
+	if not frappe.get_single(SETTINGS).enabled:
+		frappe.throw(_("DATEV sync is disabled in DATEV ERPNext Settings."))
 	if not client_for(company):
 		frappe.throw(_("No enabled DATEV Client is assigned to company {0}.").format(company))
 
 	dates = ("between", [from_date, to_date]) if to_date else (">=", from_date)
 	names = frappe.get_all(
 		"Sales Invoice",
-		filters={"company": company, "docstatus": 1, "posting_date": dates},
+		filters={"company": company, "docstatus": 1, "is_opening": ("!=", "Yes"), "posting_date": dates},
 		pluck="name",
 		order_by="posting_date, name",
 	)
@@ -128,7 +162,7 @@ def backfill(company: str, from_date: str, to_date: str | None = None) -> int:
 	)
 	missing = [name for name in names if name not in synced]
 	for name in missing:
-		_enqueue(name, queue="long")
+		_enqueue(name, queue="long", from_backfill=True)
 	return len(missing)
 
 

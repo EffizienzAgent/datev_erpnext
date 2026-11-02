@@ -55,6 +55,16 @@ class TestLines(IntegrationTestCase):
 			sales_invoice_lines(invoice), [self._insurance("26.77", "S"), self._rent("107.08", "S")]
 		)
 
+	def test_zero_amount_line_is_dropped(self):
+		invoice = make_invoice(self.company, [*MIXED, ("ZUB", 1, 0)])
+		self.assertEqual(
+			sales_invoice_lines(invoice), [self._insurance("29.75", "S"), self._rent("119.00", "S")]
+		)
+
+	def test_zero_total_has_no_lines(self):
+		invoice = make_invoice(self.company, [("ZUB", 1, 0)])
+		self.assertEqual(sales_invoice_lines(invoice), [])
+
 	def test_negative_row(self):
 		invoice = make_invoice(self.company, [("MIETE", 1, 100), ("VERS", -1, 10)])
 		self.assertEqual(

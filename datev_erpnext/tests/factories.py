@@ -9,6 +9,7 @@ PRICE_LIST = "Standard Selling"
 ACCOUNTS = (
 	("Erlöse 19 % USt", "4400", "Income Account", "Direct Income", 0),
 	("Steuerfreie Umsätze", "4100", "Income Account", "Direct Income", 0),
+	("Erlöse Zubehör", "4200", "Income Account", "Direct Income", 0),
 	("Umsatzsteuer 19 %", "3806", "Tax", "Duties and Taxes", 19),
 	("Forderungen aus Lieferungen und Leistungen", "1200", "Receivable", "Accounts Receivable", 0),
 )
@@ -145,6 +146,7 @@ def _ensure_items(company):
 	for code, account, template in (
 		("MIETE", "4400", f"DE 19 % - {company.abbr}"),
 		("VERS", "4100", f"DE steuerfrei - {company.abbr}"),
+		("ZUB", "4200", f"DE 19 % - {company.abbr}"),
 	):
 		if frappe.db.exists("Item", code):
 			continue
@@ -178,6 +180,7 @@ def _ensure_customer():
 
 
 def make_client(company, **overrides):
+	abbr = frappe.db.get_value("Company", company, "abbr")
 	values = {
 		"doctype": "DATEV Client",
 		"title": f"Test Client {frappe.generate_hash(length=8)}",
@@ -192,6 +195,10 @@ def make_client(company, **overrides):
 		"master_data_connector": "EXTF",
 		"debtor_numbering": "Source system",
 		"creditor_numbering": "Source system",
+		"tax_keys": [
+			{"tax_code": f"DE 19 % - {abbr}", "bu_key": ""},
+			{"tax_code": f"DE steuerfrei - {abbr}", "bu_key": ""},
+		],
 	}
 	values.update(overrides)
 	return frappe.get_doc(values).insert()

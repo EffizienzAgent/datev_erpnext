@@ -23,6 +23,7 @@
  ],
  "field_order": [
   "enabled",
+  "sync_from_date",
   "customer_number_field",
   "document_image_source",
   "print_format",
@@ -34,6 +35,12 @@
    "fieldtype": "Check",
    "label": "Enabled",
    "default": "1"
+  },
+  {
+   "fieldname": "sync_from_date",
+   "fieldtype": "Date",
+   "label": "Sync from date",
+   "description": "Invoices posted on or after this date are synced on submit. Empty: no automatic sync. Use the backfill for earlier invoices."
   },
   {
    "fieldname": "customer_number_field",
