@@ -10,8 +10,8 @@ One DATEV Document per invoice, source key `Sales Invoice:<name>`, direction Out
 
 Items are grouped by revenue account number, tax code and tax rate. Each group is one booking:
 
-- **Tax code:** the item's tax template, otherwise the invoice's taxes and charges template. The core maps the tax code to a BU key in the client's tax keys table; an empty BU key means automatic account. Configure one row per tax code on the DATEV Client; a tax code without a row is rejected.
-- **Rate:** the sum of the item-wise rates of the tax rows on Tax accounts.
+- **Tax code:** the item's tax template, otherwise the invoice's taxes and charges template. A line without either is rejected, even if tax rows were typed in by hand. The core maps the tax code to a BU key in the client's tax keys table; an empty BU key means automatic account. Configure one row per tax code on the DATEV Client; a tax code without a row is rejected.
+- **Rate:** the sum of the item-wise rates of the tax rows on Tax accounts. It must match the rate the tax code stands for: for an Item Tax Template the sum of its rates on Tax accounts, for a Sales Taxes and Charges Template the sum of its `On Net Total` rates on Tax accounts. A difference above 0.001 is rejected, because the BU key would not fit the booked tax.
 - **Gross:** net amount plus the item-wise tax amount of that group.
 - **Zero lines:** groups with a total of 0 are dropped. An invoice without any remaining line is not sent.
 - **Line key:** `<account>:<tax code>:<rate>`, stable across re-runs, so a repeated sync updates instead of duplicating.
@@ -27,7 +27,7 @@ The lines must add up to the invoice's rounded total, considering the sides. A d
 
 ## Rejected cases
 
-The invoice is not synced, everything is rolled back, an error is logged, and a comment `DATEV: <reason>` appears on the invoice. The status indicator stays grey (`not transferred`).
+The invoice is not synced, everything is rolled back, an error is logged, and a comment `DATEV: <reason>` appears on the invoice. The status indicator shows a red `DATEV: error`, and the invoice is listed in the report **Sales Invoices without DATEV**.
 
 | Case | Reason |
 | --- | --- |
@@ -36,6 +36,10 @@ The invoice is not synced, everything is rolled back, an error is logged, and a 
 | Rounding gap too large | The lines differ from the total by more than the tolerance above. |
 | Invalid posting text template | The template uses unknown placeholders. |
 | Unknown tax code | A line's tax code has no row in the DATEV Client's tax keys. |
+| No tax template | A line has neither an item tax template nor a taxes and charges template on the invoice. |
+| Rate mismatch | The applied rate of a line differs from the rate of its tax template (for example the template says 19 % but 0 % is applied). |
+| Write-off | The invoice has a write-off amount. Write-offs are not supported yet. |
+| Zero total with lines | The invoice total is zero but its lines are not (for example a revenue line and a credit line on different accounts). DATEV cannot take a document without an amount. |
 | Client ambiguity | More than one enabled DATEV Client for the Company. |
 
 ## Not supported yet
@@ -43,5 +47,6 @@ The invoice is not synced, everything is rolled back, an error is logged, and a 
 - Purchase invoices (incoming invoices).
 - Payments and bank bookings.
 - Charges outside tax accounts.
+- Write-offs.
 - Opening invoices (`is_opening`); they are skipped.
 - Multi-currency postings: the base amounts are sent in company currency.
