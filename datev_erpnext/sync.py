@@ -117,7 +117,7 @@ def _sync(client, invoice) -> str | None:
 def _check_tax_keys(client, lines):
 	known = {row.tax_code for row in client.tax_keys}
 	for line in lines:
-		if line.tax_code and line.tax_code not in known:
+		if line.tax_code not in known:
 			frappe.throw(
 				_(
 					"Tax code {0} has no row in the tax keys of DATEV Client {1}. Add it to the DATEV Client's tax keys; leave the BU key empty for automatic accounts."

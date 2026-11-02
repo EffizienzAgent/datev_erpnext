@@ -147,6 +147,7 @@ def _ensure_items(company):
 		("MIETE", "4400", f"DE 19 % - {company.abbr}"),
 		("VERS", "4100", f"DE steuerfrei - {company.abbr}"),
 		("ZUB", "4200", f"DE 19 % - {company.abbr}"),
+		("SERVICE", "4400", None),
 	):
 		if frappe.db.exists("Item", code):
 			continue
@@ -159,7 +160,7 @@ def _ensure_items(company):
 				"stock_uom": "Nos",
 				"is_stock_item": 0,
 				"item_defaults": [{"company": company.name, "income_account": _account(company, account)}],
-				"taxes": [{"item_tax_template": template}],
+				"taxes": [{"item_tax_template": template}] if template else [],
 			}
 		).insert()
 

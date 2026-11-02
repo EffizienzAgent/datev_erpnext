@@ -115,3 +115,44 @@ class TestLines(IntegrationTestCase):
 		frappe.clear_document_cache("Account", account)
 		with self.assertRaisesRegex(frappe.ValidationError, account):
 			sales_invoice_lines(invoice)
+
+	def test_line_without_tax_code_rejected(self):
+		vat = frappe.db.get_value("Account", {"company": self.company, "account_number": "3806"})
+		invoice = make_invoice(
+			self.company,
+			[("SERVICE", 1, 100)],
+			taxes=[{"charge_type": "On Net Total", "account_head": vat, "description": "USt", "rate": 19}],
+		)
+		self.assertFalse(invoice.taxes_and_charges)
+		self.assertFalse(invoice.items[0].item_tax_template)
+		with self.assertRaisesRegex(frappe.ValidationError, "has no tax template"):
+			sales_invoice_lines(invoice)
+
+	def test_rate_mismatch_rejected(self):
+		invoice = make_invoice(self.company, [("MIETE", 1, 100)])
+		self.assertEqual(invoice.items[0].item_tax_template, self.vat)
+		for row in invoice.item_wise_tax_details:
+			row.rate, row.amount = 0, 0
+		invoice.base_grand_total = invoice.base_rounded_total = 100
+		with self.assertRaisesRegex(frappe.ValidationError, "expects a rate of 19% but 0% is applied"):
+			sales_invoice_lines(invoice)
+
+	def test_rate_match_ok(self):
+		invoice = make_invoice(self.company, [("SERVICE", 1, 100)])
+		invoice.append_taxes_from_master()
+		invoice.save()
+		self.assertFalse(invoice.items[0].item_tax_template)
+		self.assertEqual(invoice.base_grand_total, 119)
+		self.assertEqual(sales_invoice_lines(invoice), [self._rent("119.00", "S")])
+
+	def test_write_off_rejected(self):
+		invoice = make_invoice(self.company, [("MIETE", 1, 100)])
+		invoice.base_write_off_amount = 1
+		with self.assertRaisesRegex(frappe.ValidationError, "Write-offs are not supported yet"):
+			sales_invoice_lines(invoice)
+
+	def test_net_zero_total_rejected(self):
+		invoice = make_invoice(self.company, [("MIETE", 1, 100), ("ZUB", -1, 100)])
+		self.assertEqual(invoice.base_grand_total, 0)
+		with self.assertRaisesRegex(frappe.ValidationError, "total of zero"):
+			sales_invoice_lines(invoice)

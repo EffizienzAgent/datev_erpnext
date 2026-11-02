@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: DATEV for ERPNext VERSION\n"
 "Report-Msgid-Bugs-To: oss@effizienzagent.de\n"
-"POT-Creation-Date: 2026-11-02 13:48+0000\n"
-"PO-Revision-Date: 2026-11-02 13:48+0000\n"
+"POT-Creation-Date: 2026-11-02 18:36+0000\n"
+"PO-Revision-Date: 2026-11-02 18:36+0000\n"
 "Last-Translator: oss@effizienzagent.de\n"
 "Language-Team: oss@effizienzagent.de\n"
 "MIME-Version: 1.0\n"
@@ -16,17 +16,17 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: datev_erpnext/lines.py:30
+#: datev_erpnext/lines.py:33
 #, python-brace-format
 msgid "Account {0} has no numeric account number"
 msgstr ""
 
-#: datev_erpnext/lines.py:108
+#: datev_erpnext/lines.py:159
 #, python-brace-format
 msgid "Booking lines of invoice {0} differ from its total by {1}"
 msgstr ""
 
-#: datev_erpnext/lines.py:44
+#: datev_erpnext/lines.py:47
 #, python-brace-format
 msgid "Charges on account {0} are not supported yet"
 msgstr ""
@@ -81,6 +81,16 @@ msgstr ""
 msgid "Fieldname on Customer used as preferred debtor number. Leave empty to let the DATEV app assign numbers."
 msgstr ""
 
+#: datev_erpnext/lines.py:147
+#, python-brace-format
+msgid "Invoice {0} has a total of zero but booking lines that are not zero. DATEV cannot take a document without an amount."
+msgstr ""
+
+#: datev_erpnext/lines.py:103
+#, python-brace-format
+msgid "Invoice {0} has a write-off. Write-offs are not supported yet."
+msgstr ""
+
 #. Description of the 'Sync from date' (Date) field in DocType 'DATEV ERPNext
 #. Settings'
 #: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:43
@@ -97,6 +107,16 @@ msgstr ""
 #. Settings'
 #: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:63
 msgid "Leave empty to use the default print format of Sales Invoice."
+msgstr ""
+
+#: datev_erpnext/lines.py:74
+#, python-brace-format
+msgid "Line on account {0} has no tax template. Set an item tax template or a sales taxes template."
+msgstr ""
+
+#: datev_erpnext/lines.py:93
+#, python-brace-format
+msgid "Line on account {0} with tax template {1} expects a rate of {2} but {3} is applied."
 msgstr ""
 
 #: datev_erpnext/clients.py:9
