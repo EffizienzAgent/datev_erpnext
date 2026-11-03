@@ -25,6 +25,7 @@ def bookings(document):
 			"amount",
 			"debit_credit",
 			"tax_rate",
+			"bu_key",
 			"posting_text",
 		],
 		order_by="line_key",
@@ -337,6 +338,21 @@ class TestSync(IntegrationTestCase):
 			self.assertIsNone(self._sync_failing(invoice.name))
 		self.assertFalse(frappe.db.exists("DATEV Document", {"source_name": invoice.name}))
 		self.assertIn("DATEV: renderer down", self._comments(invoice))
+
+	def test_bu_key_follows_outgoing_direction(self):
+		vat, free = f"DE 19 % - {self._abbr()}", f"DE steuerfrei - {self._abbr()}"
+		make_client(
+			self.company,
+			tax_keys=[
+				{"tax_code": vat, "direction": "Incoming", "bu_key": "9"},
+				{"tax_code": vat, "direction": "Outgoing", "bu_key": ""},
+				{"tax_code": free, "bu_key": "1"},
+			],
+		)
+		name = sync.sync_sales_invoice(self._submitted().name)
+		self.assertEqual(
+			sorted((row.tax_rate, row.bu_key or "") for row in bookings(name)), [(0, "1"), (19, "")]
+		)
 
 	def test_tax_code_without_tax_key_is_rejected(self):
 		make_client(self.company, tax_keys=[{"tax_code": f"DE 19 % - {self._abbr()}", "bu_key": ""}])

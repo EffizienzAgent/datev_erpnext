@@ -243,9 +243,9 @@ def _sync(client, invoice, image: tuple[str, bytes]) -> str | None:
 	lines = _lines(invoice)
 	if not lines:
 		return None
-	check_tax_keys(client, lines)
-	posting_text = _posting_text(invoice)
 	purchase = invoice.doctype == PURCHASE_INVOICE
+	check_tax_keys(client, lines, "Incoming" if purchase else "Outgoing")
+	posting_text = _posting_text(invoice)
 	if purchase:
 		party = party_account_for(client, invoice.supplier, "Supplier")
 	else:

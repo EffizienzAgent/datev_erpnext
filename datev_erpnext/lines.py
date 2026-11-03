@@ -3,6 +3,7 @@ from dataclasses import dataclass, replace
 from decimal import Decimal
 
 import frappe
+from datev.intake import tax_key
 from frappe import _
 
 CENT = Decimal("0.01")
@@ -233,20 +234,20 @@ def debit_credit(invoice) -> str:
 	return "H" if invoice.is_return else "S"
 
 
-def check_tax_keys(client, lines):
-	keys = {row.tax_code: row.bu_key for row in client.tax_keys}
+def check_tax_keys(client, lines, direction: str):
 	for line in lines:
-		if line.tax_code not in keys:
+		bu_key = tax_key(client.name, line.tax_code, direction)
+		if bu_key is None:
 			frappe.throw(
 				_(
-					"Tax code {0} has no row in the tax keys of DATEV Client {1}. Add it to the DATEV Client's tax keys; leave the BU key empty for automatic accounts."
-				).format(line.tax_code, client.name),
+					"Tax code {0} has no row for direction {1} or Any in the tax keys of DATEV Client {2}. Add it to the DATEV Client's tax keys; leave the BU key empty for automatic accounts."
+				).format(line.tax_code, _(direction), client.name),
 				frappe.ValidationError,
 			)
-		if line.reverse_charge and not keys[line.tax_code]:
+		if line.reverse_charge and not bu_key:
 			frappe.throw(
 				_(
-					"Tax code {0} is a reverse charge template and needs a BU key in the tax keys of DATEV Client {1}."
-				).format(line.tax_code, client.name),
+					"Tax code {0} is a reverse charge template and needs a BU key for direction {1} in the tax keys of DATEV Client {2}."
+				).format(line.tax_code, _(direction), client.name),
 				frappe.ValidationError,
 			)

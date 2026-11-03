@@ -58,7 +58,7 @@ class TestPurchases(IntegrationTestCase):
 		code = self._code(REVERSE_CHARGE)
 		lines = purchase_invoice_lines(invoice)
 		self.assertEqual(lines, [Line(f"6815:{code}:0", 6815, Decimal("1000.00"), 0, code, "H", True)])
-		check_tax_keys(make_client(self.company), lines)
+		check_tax_keys(make_client(self.company), lines, "Incoming")
 
 	def test_reverse_charge_without_bu_key_rejected(self):
 		client = make_client(self.company)
@@ -68,8 +68,47 @@ class TestPurchases(IntegrationTestCase):
 		client.save()
 		lines = purchase_invoice_lines(self._reverse_charge())
 		with self.assertRaises(frappe.ValidationError) as raised:
-			check_tax_keys(client, lines)
+			check_tax_keys(client, lines, "Incoming")
 		self.assertIn("needs a BU key", str(raised.exception))
+
+	def test_reverse_charge_needs_incoming_bu_key(self):
+		code = self._code(REVERSE_CHARGE)
+		lines = purchase_invoice_lines(self._reverse_charge())
+
+		def client(*rows):
+			others = [row for row in make_client(self.company).tax_keys if row.tax_code != code]
+			keys = [{"tax_code": row.tax_code, "bu_key": row.bu_key} for row in others]
+			return make_client(self.company, tax_keys=keys + [{"tax_code": code, **row} for row in rows])
+
+		check_tax_keys(client({"bu_key": ""}, {"direction": "Incoming", "bu_key": "94"}), lines, "Incoming")
+		with self.assertRaises(frappe.ValidationError) as raised:
+			check_tax_keys(
+				client({"bu_key": "94"}, {"direction": "Incoming", "bu_key": ""}), lines, "Incoming"
+			)
+		self.assertIn("needs a BU key", str(raised.exception))
+		with self.assertRaises(frappe.ValidationError) as raised:
+			check_tax_keys(client({"direction": "Outgoing", "bu_key": "94"}), lines, "Incoming")
+		self.assertIn("has no row", str(raised.exception))
+
+	def test_tax_keys_checked_per_direction(self):
+		code = self._code(INPUT_TAX)
+		lines = [Line(f"6815:{code}:19", 6815, Decimal("119.00"), 19, code, "H")]
+		client = make_client(
+			self.company,
+			tax_keys=[
+				{"tax_code": code, "direction": "Outgoing", "bu_key": ""},
+				{"tax_code": code, "direction": "Incoming", "bu_key": "9"},
+			],
+		)
+		check_tax_keys(client, lines, "Outgoing")
+		check_tax_keys(client, lines, "Incoming")
+		outgoing_only = make_client(
+			self.company, tax_keys=[{"tax_code": code, "direction": "Outgoing", "bu_key": ""}]
+		)
+		check_tax_keys(outgoing_only, lines, "Outgoing")
+		with self.assertRaises(frappe.ValidationError) as raised:
+			check_tax_keys(outgoing_only, lines, "Incoming")
+		self.assertIn("has no row for direction", str(raised.exception))
 
 	def test_single_deduct_row_rejected(self):
 		invoice = make_purchase_invoice(self.company, [("BUERO", 1, 100)])

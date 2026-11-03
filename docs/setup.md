@@ -92,7 +92,7 @@ Without a file, the invoice is not sent and gets the comment `DATEV note: no sup
 
 **Turning it on later:** the switch is not limited to new invoices. The daily catch-up sends every submitted Purchase Invoice with a posting date on or after **Sync from date** that is not in DATEV yet. If you booked supplier invoices in DATEV by hand until now, set **Sync from date** past them first or they are booked twice.
 
-Belegfeld 1 is the supplier invoice number (`bill_no`), which is required. Add one row per purchase tax code to the client's tax keys; a reverse charge template needs a BU key (see [mapping](mapping.md#reverse-charge)). Cancelling works like for sales invoices: blocked once the document is uploaded, correct with a debit note instead.
+Belegfeld 1 is the supplier invoice number (`bill_no`), which is required. Add one row per purchase tax code to the client's tax keys; set its direction to `Incoming` if the same template is used on sales invoices with a different BU key. A reverse charge template needs a BU key (see [mapping](mapping.md#reverse-charge)). Cancelling works like for sales invoices: blocked once the document is uploaded, correct with a debit note instead.
 
 ## Payments
 
@@ -108,7 +108,7 @@ With **Sync Payments** on, a submitted Payment Entry and a submitted Journal Ent
 
 ## Going live
 
-1. Install, set `host_name`, create and test the DATEV Client with a test mandate, fill the settings. Add one row per tax code (Sales Taxes and Charges Template or Item Tax Template name) to the client's tax keys; leave the BU key empty for automatic accounts.
+1. Install, set `host_name`, create and test the DATEV Client with a test mandate, fill the settings. Add one row per tax code (Sales Taxes and Charges Template or Item Tax Template name) to the client's tax keys; leave the BU key empty for automatic accounts. Use direction `Any` unless a template needs different BU keys on sales (`Outgoing`) and purchases (`Incoming`).
 2. Set **Sync from date** to the go-live date. Leave it empty while you import invoices or run ERPNext in parallel with your old system: every invoice submitted on or after this date is sent to DATEV, imported or not, which can book revenue twice. The daily catch-up also picks up every submitted invoice with a posting date on or after this date that is not in DATEV yet.
 3. Run `register_customers` for the Company. It creates the party accounts of all customers with submitted invoices (and all customers with a number in the customer number field). Disabled customers are skipped.
 
