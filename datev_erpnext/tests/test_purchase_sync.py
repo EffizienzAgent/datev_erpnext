@@ -234,6 +234,17 @@ class TestPurchaseSync(IntegrationTestCase):
 		)
 		self.assertEqual((Decimal(str(row.amount)), row.bu_key, row.tax_rate), (Decimal("1000"), "94", 0))
 
+	def test_bu_key_follows_incoming_direction(self):
+		code = f"{INPUT_TAX} - {frappe.db.get_value('Company', self.company, 'abbr')}"
+		self.client.tax_keys = [row for row in self.client.tax_keys if row.tax_code != code]
+		self.client.append("tax_keys", {"tax_code": code, "direction": "Outgoing", "bu_key": ""})
+		self.client.append("tax_keys", {"tax_code": code, "direction": "Incoming", "bu_key": "9"})
+		self.client.save()
+		document = sync.sync_purchase_invoice(self._invoice().name)
+		self.assertEqual(
+			frappe.get_all("DATEV Booking", filters={"document": document}, pluck="bu_key"), ["9"]
+		)
+
 	def test_tax_code_check_uses_purchase_template(self):
 		abbr = frappe.db.get_value("Company", self.company, "abbr")
 		self.client.tax_keys = [

@@ -10,7 +10,7 @@ One DATEV Document per invoice, source key `Sales Invoice:<name>`, direction Out
 
 Items are grouped by revenue account number, tax code and tax rate. Each group is one booking:
 
-- **Tax code:** the item's tax template, otherwise the invoice's taxes and charges template. A line without either is rejected, even if tax rows were typed in by hand. The core maps the tax code to a BU key in the client's tax keys table; an empty BU key means automatic account. Configure one row per tax code on the DATEV Client; a tax code without a row is rejected.
+- **Tax code:** the item's tax template, otherwise the invoice's taxes and charges template. A line without either is rejected, even if tax rows were typed in by hand. The core maps the tax code to a BU key in the client's tax keys table; an empty BU key means automatic account. Configure one row per tax code on the DATEV Client; a tax code without a row is rejected. Sales invoices use the row with direction `Outgoing`, purchase invoices the row with direction `Incoming`, each falling back to the row with direction `Any`. An Item Tax Template shared between sales and purchases can so carry different BU keys, for example an empty key for sales on automatic revenue accounts and 9 for 19 % input tax on normal expense accounts.
 - **Rate:** the sum of the item-wise rates of the tax rows on Tax accounts. It must match the rate the tax code stands for: the sum of the template's rates on those Tax accounts that are also tax rows of the invoice (rows marked "Not Applicable" in an Item Tax Template count as 0; for a Sales Taxes and Charges Template only `On Net Total` rows count). So a template that also lists input tax or other output tax accounts, as the templates of German charts often do, still matches its 19 % on the invoice. A difference above 0.001 is rejected, because the BU key would not fit the booked tax. A template with a non-zero rate none of whose accounts is on the invoice is rejected as well.
 - **Gross:** net amount plus the item-wise tax amount of that group.
 - **Zero lines:** groups with a total of 0 are dropped. An invoice without any remaining line is not sent and gets the comment `DATEV note: no booking lines, not transferred.`
@@ -35,7 +35,7 @@ The invoice is not synced, everything is rolled back, an error is logged, and a 
 | Missing account number | A revenue account without a numeric account number. |
 | Rounding gap too large | The lines differ from the total by more than the tolerance above. |
 | Invalid posting text template | The template uses unknown placeholders. |
-| Unknown tax code | A line's tax code has no row in the DATEV Client's tax keys. |
+| Unknown tax code | A line's tax code has no row for the invoice's direction (`Outgoing` for sales, `Incoming` for purchases) or `Any` in the DATEV Client's tax keys. |
 | No tax template | A line has neither an item tax template nor a taxes and charges template on the invoice. |
 | Rate mismatch | The applied rate of a line differs from the rate of its tax template (for example the template says 19 % but 0 % is applied). |
 | Tax template not on invoice | None of the tax accounts of the line's tax template is a tax row of the invoice. |
@@ -54,7 +54,7 @@ One DATEV Document per Purchase Invoice, source key `Purchase Invoice:<name>`, d
 
 ### Reverse charge
 
-Reverse charge (§ 13b UStG) and intra-EU acquisitions are expected as a template with an input tax row (`Add`) and an output tax row (`Deduct`) on Tax accounts at the same rate. The pair must come from the invoice's Purchase Taxes and Charges Template, and the `Add` account must not be a regular input tax account (one used in a template of the company without any `Deduct` row); use dedicated accounts for reverse charge input tax. Such a pair is recognised as reverse charge: the line goes out with its **net** amount and rate 0, and the tax code's row in the client's tax keys must carry a BU key (DATEV computes both taxes from it). An empty BU key is rejected.
+Reverse charge (§ 13b UStG) and intra-EU acquisitions are expected as a template with an input tax row (`Add`) and an output tax row (`Deduct`) on Tax accounts at the same rate. The pair must come from the invoice's Purchase Taxes and Charges Template, and the `Add` account must not be a regular input tax account (one used in a template of the company without any `Deduct` row); use dedicated accounts for reverse charge input tax. Such a pair is recognised as reverse charge: the line goes out with its **net** amount and rate 0, and the tax code's `Incoming` row in the client's tax keys (or its `Any` row, if there is no `Incoming` row) must carry a BU key (DATEV computes both taxes from it). An empty BU key is rejected.
 
 ### Rejected purchase invoices
 
