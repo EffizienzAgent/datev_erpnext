@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/EffizienzAgent/datev_erpnext/compare/v0.3.2...v0.3.3) (2026-11-03)
+
+
+### Bug Fixes
+
+* only absorb rounding in the check of Actual tax amounts ([#10](https://github.com/EffizienzAgent/datev_erpnext/issues/10)) ([53f3c00](https://github.com/EffizienzAgent/datev_erpnext/commit/53f3c0036812309d6f757c4e91ee982508d677be))
+
 ## [0.3.2](https://github.com/EffizienzAgent/datev_erpnext/compare/v0.3.1...v0.3.2) (2026-11-03)
 
 
