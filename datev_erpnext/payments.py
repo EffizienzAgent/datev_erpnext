@@ -8,10 +8,12 @@ from frappe import _
 from frappe.utils import getdate
 
 from datev_erpnext.lines import CENT, account_number
+from datev_erpnext.purchases import document_field as purchase_document_field
 
 BANK_TYPES = ("Bank", "Cash")
 PARTY_ACCOUNTS = {("Receivable", "Asset"): "Customer", ("Payable", "Liability"): "Supplier"}
 MAX_KEY_LENGTH = 120
+SETTINGS = "DATEV ERPNext Settings"
 
 
 class Waiting(frappe.ValidationError):
@@ -158,16 +160,30 @@ def reference(voucher, against_type: str | None, against: str | None) -> tuple[s
 	if against_type == "Sales Invoice":
 		return against, _dependency(against_type, against)
 	if against_type == "Purchase Invoice":
-		raise Waiting(
-			_("Line for purchase invoice {0} is waiting for purchase invoices to be synced.").format(against)
-		)
+		return _purchase_reference(against)
 	return voucher.name, None
 
 
+def _purchase_reference(name: str) -> tuple[str, str | None]:
+	invoice = frappe.get_doc("Purchase Invoice", name)
+	if _in_sync_period(invoice) and not frappe.db.get_single_value(SETTINGS, "sync_purchase_invoices"):
+		raise Waiting(
+			_("Line for purchase invoice {0} is waiting for purchase invoices to be synced.").format(name)
+		)
+	return purchase_document_field(invoice), _dependency("Purchase Invoice", name)
+
+
+def _in_sync_period(invoice) -> bool:
+	sync_from_date = frappe.db.get_single_value(SETTINGS, "sync_from_date")
+	return (
+		invoice.is_opening != "Yes"
+		and bool(sync_from_date)
+		and getdate(invoice.posting_date) >= getdate(sync_from_date)
+	)
+
+
 def _dependency(doctype: str, name: str) -> str | None:
-	posting_date, is_opening = frappe.db.get_value(doctype, name, ["posting_date", "is_opening"])
-	sync_from_date = frappe.db.get_single_value("DATEV ERPNext Settings", "sync_from_date")
-	if is_opening == "Yes" or not sync_from_date or getdate(posting_date) < getdate(sync_from_date):
+	if not _in_sync_period(frappe.get_doc(doctype, name)):
 		return None
 	document = frappe.db.get_value("DATEV Document", {"source_key": f"{doctype}:{name}"}, "name")
 	if not document:

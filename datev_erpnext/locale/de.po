@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: DATEV for ERPNext\n"
 "Report-Msgid-Bugs-To: oss@effizienzagent.de\n"
-"POT-Creation-Date: 2026-11-03 08:38+0000\n"
+"POT-Creation-Date: 2026-11-03 08:42+0000\n"
 "PO-Revision-Date: 2026-11-02 13:27+0000\n"
 "Last-Translator: oss@effizienzagent.de\n"
 "Language: de\n"
@@ -158,7 +158,7 @@ msgstr "Zuletzt angehängte PDF"
 msgid "Leave empty to use the default print format of Sales Invoice."
 msgstr "Leer lassen, um das Standard-Druckformat der Ausgangsrechnung zu verwenden."
 
-#: datev_erpnext/payments.py:162
+#: datev_erpnext/payments.py:171
 #, python-brace-format
 msgid "Line for purchase invoice {0} is waiting for purchase invoices to be synced."
 msgstr "Die Zeile zur Eingangsrechnung {0} wartet, bis Eingangsrechnungen synchronisiert werden."
@@ -211,7 +211,7 @@ msgstr "Partei"
 msgid "Party Name"
 msgstr "Parteiname"
 
-#: datev_erpnext/payments.py:51
+#: datev_erpnext/payments.py:53
 #, python-brace-format
 msgid "Payment Entry {0} has no bank or cash account on its bank side."
 msgstr "Zahlung {0} hat auf der Bankseite kein Bank- oder Kassenkonto."
@@ -366,7 +366,7 @@ msgstr "Belegart"
 msgid "Vouchers without DATEV"
 msgstr "Belege ohne DATEV"
 
-#: datev_erpnext/payments.py:174
+#: datev_erpnext/payments.py:190
 #, python-brace-format
 msgid "Waiting for {0} {1} to be transferred to DATEV."
 msgstr "Wartet, bis {0} {1} an DATEV übertragen ist."

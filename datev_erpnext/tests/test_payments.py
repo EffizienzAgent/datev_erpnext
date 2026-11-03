@@ -5,7 +5,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from datev_erpnext import sync
-from datev_erpnext.payments import PaymentLine, voucher_lines
+from datev_erpnext.payments import PaymentLine, Waiting, voucher_lines
 from datev_erpnext.tests.factories import (
 	CUSTOMER_NAME,
 	SUPPLIER_NAME,
@@ -16,6 +16,7 @@ from datev_erpnext.tests.factories import (
 	make_invoice,
 	make_journal,
 	make_payment,
+	make_purchase_invoice,
 	supplier,
 )
 from datev_erpnext.tests.test_images import minimal_pdf
@@ -251,3 +252,55 @@ class TestPayments(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError) as raised:
 			voucher_lines("Journal Entry", journal.name)
 		self.assertIn(unnumbered.name, str(raised.exception))
+
+	def _purchase(self, attach=True):
+		invoice = make_purchase_invoice(self.company, [("BUERO", 1, 100)])
+		if attach:
+			frappe.get_doc(
+				{
+					"doctype": "File",
+					"file_name": "lieferant.pdf",
+					"content": minimal_pdf(),
+					"is_private": 1,
+					"attached_to_doctype": "Purchase Invoice",
+					"attached_to_name": invoice.name,
+				}
+			).insert(ignore_permissions=True)
+		invoice.submit()
+		return invoice
+
+	def _creditor(self, invoice, depends_on):
+		return self._line(
+			f"3300:{supplier()}:{invoice.name}",
+			"119.00",
+			"S",
+			invoice.bill_no,
+			party_type="Supplier",
+			party=supplier(),
+			depends_on=depends_on,
+			posting_text=SUPPLIER_NAME,
+		)
+
+	def test_supplier_payment_uses_bill_no_and_waits(self):
+		frappe.db.set_single_value("DATEV ERPNext Settings", "sync_purchase_invoices", 1)
+		invoice = self._purchase()
+		payment = make_payment(self.company, [(invoice.name, 119)], payment_type="Pay")
+		payment.submit()
+		with self.assertRaises(Waiting) as raised:
+			voucher_lines("Payment Entry", payment.name)
+		self.assertIn(invoice.name, str(raised.exception))
+
+		document = sync.sync_purchase_invoice(invoice.name)
+		self.assertTrue(document)
+		self.assertEqual(voucher_lines("Payment Entry", payment.name), [self._creditor(invoice, document)])
+
+	def test_supplier_payment_held_when_purchases_off(self):
+		invoice = self._purchase()
+		payment = make_payment(self.company, [(invoice.name, 119)], payment_type="Pay")
+		payment.submit()
+		with self.assertRaises(Waiting) as raised:
+			voucher_lines("Payment Entry", payment.name)
+		self.assertIn("waiting for purchase invoices to be synced", str(raised.exception))
+
+		frappe.db.set_single_value("DATEV ERPNext Settings", "sync_from_date", "2999-01-01")
+		self.assertEqual(voucher_lines("Payment Entry", payment.name), [self._creditor(invoice, None)])
