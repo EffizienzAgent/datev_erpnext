@@ -8,7 +8,6 @@ from frappe import _
 
 CENT = Decimal("0.01")
 RATE_TOLERANCE = 0.001
-ACTUAL_RATE_TOLERANCE = Decimal("0.005")
 ITEM_TAX_TEMPLATE = "Item Tax Template"
 SALES_TAX_TEMPLATE = "Sales Taxes and Charges Template"
 PURCHASE_TAX_TEMPLATE = "Purchase Taxes and Charges Template"
@@ -137,9 +136,9 @@ def _check_rate(account: str, code: str, expected: float, applied: float):
 		)
 
 
-def _check_effective_rate(account: str, code: str, rate: float, net: Decimal, tax: Decimal):
+def _check_effective_rate(account: str, code: str, rate: float, net: Decimal, tax: Decimal, items: int):
 	expected = net * Decimal(str(rate)) / 100
-	if abs(tax - expected) > abs(net) * ACTUAL_RATE_TOLERANCE + CENT:
+	if abs(tax - expected) > CENT * max(items, 1) + CENT:
 		effective = f"{tax / net * 100:.2f}%" if net else "-"
 		frappe.throw(
 			_(
@@ -180,7 +179,7 @@ def invoice_lines(
 	expected = {}
 	totals = defaultdict(Decimal)
 	reverse_charge_keys = set()
-	actual = defaultdict(lambda: (Decimal(0), Decimal(0)))
+	actual = defaultdict(lambda: (Decimal(0), Decimal(0), 0))
 	for item in invoice.items:
 		account = item.get(account_field)
 		rate, tax, has_actual = taxes[item.name]
@@ -190,15 +189,15 @@ def invoice_lines(
 		key = (account_number(account), code, expected[doctype, code])
 		net = _decimal(item.base_net_amount)
 		if has_actual:
-			line_net, line_tax = actual[key, account]
-			actual[key, account] = (line_net + net, line_tax + tax)
+			line_net, line_tax, items = actual[key, account]
+			actual[key, account] = (line_net + net, line_tax + tax, items + 1)
 		else:
 			_check_rate(account, code, expected[doctype, code], rate)
 		totals[key] += net + tax
 		if item.name in charged:
 			reverse_charge_keys.add(key)
-	for ((_number, code, rate), account), (net, tax) in actual.items():
-		_check_effective_rate(account, code, rate, net, tax)
+	for ((_number, code, rate), account), (net, tax, items) in actual.items():
+		_check_effective_rate(account, code, rate, net, tax, items)
 
 	sign = -1 if invoice.is_return else 1
 	lines = sorted(

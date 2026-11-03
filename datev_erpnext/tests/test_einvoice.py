@@ -81,6 +81,20 @@ class TestEInvoice(IntegrationTestCase):
 		invoice = self._import([("BUERO", 1, 100)], [(19, 100, 19.01)])
 		self.assertEqual(purchase_invoice_lines(invoice), [self._input_tax_line("119.01")])
 
+	def test_difference_beyond_rounding_rejected(self):
+		invoice = self._import([("BUERO", 1, 10000)], [(19, 10000, 1940)])
+		with self.assertRaises(frappe.ValidationError) as raised:
+			purchase_invoice_lines(invoice)
+		self.assertIn("its tax amounts give 19.40%", str(raised.exception))
+
+	def test_cent_rounding_per_item_accepted(self):
+		invoice = self._import(
+			[("BUERO", 3, 33.33), ("FREMD", 1, 10.01)],
+			[(19, 110, 20.92)],
+			taxes_and_charges=f"{INPUT_TAX} - {self.abbr}",
+		)
+		self.assertEqual(purchase_invoice_lines(invoice), [self._input_tax_line("130.92")])
+
 	def test_wrong_rate_rejected(self):
 		invoice = self._import([("BUERO", 1, 100)], [(7, 100, 7)])
 		with self.assertRaises(frappe.ValidationError) as raised:
