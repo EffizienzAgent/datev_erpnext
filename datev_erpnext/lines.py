@@ -8,10 +8,12 @@ from frappe import _
 
 CENT = Decimal("0.01")
 RATE_TOLERANCE = 0.001
+ACTUAL_RATE_TOLERANCE = Decimal("0.005")
 ITEM_TAX_TEMPLATE = "Item Tax Template"
 SALES_TAX_TEMPLATE = "Sales Taxes and Charges Template"
 PURCHASE_TAX_TEMPLATE = "Purchase Taxes and Charges Template"
 ON_NET_TOTAL = "On Net Total"
+ACTUAL = "Actual"
 
 
 @dataclass(frozen=True)
@@ -46,7 +48,7 @@ def tax_rows(invoice) -> dict[str, str]:
 	for tax in invoice.get("taxes") or []:
 		amount = _decimal(tax.base_tax_amount_after_discount_amount)
 		if _is_tax_account(tax.account_head):
-			if tax.charge_type != ON_NET_TOTAL and amount:
+			if tax.charge_type not in (ON_NET_TOTAL, ACTUAL) and amount:
 				frappe.throw(
 					_("Tax row on account {0} uses charge type {1}, which is not supported yet.").format(
 						tax.account_head, _(tax.charge_type)
@@ -62,13 +64,18 @@ def tax_rows(invoice) -> dict[str, str]:
 	return rows
 
 
-def _item_taxes(invoice, rows: dict[str, str]) -> dict[str, tuple[float, Decimal]]:
-	taxes = defaultdict(lambda: (0.0, Decimal(0)))
+def _item_taxes(invoice, rows: dict[str, str]) -> dict[str, tuple[float, Decimal, bool]]:
+	actual = {tax.name for tax in invoice.get("taxes") or [] if tax.charge_type == ACTUAL}
+	taxes = defaultdict(lambda: (0.0, Decimal(0), False))
 	for row in invoice.get("item_wise_tax_details") or []:
 		if row.tax_row not in rows:
 			continue
-		rate, amount = taxes[row.item_row]
-		taxes[row.item_row] = (rate + (row.rate or 0), amount + _decimal(row.amount))
+		rate, amount, has_actual = taxes[row.item_row]
+		if row.tax_row in actual:
+			has_actual = has_actual or bool(_decimal(row.amount))
+		else:
+			rate += row.rate or 0
+		taxes[row.item_row] = (rate, amount + _decimal(row.amount), has_actual)
 	return taxes
 
 
@@ -76,7 +83,9 @@ def _opposite(side: str) -> str:
 	return "S" if side == "H" else "H"
 
 
-def _tax_code(invoice, item, account: str, template: str) -> tuple[str, str]:
+def _tax_code(invoice, item, account: str, template: str, reverse_charge: bool) -> tuple[str, str]:
+	if reverse_charge:
+		return template, invoice.taxes_and_charges
 	if item.item_tax_template:
 		return ITEM_TAX_TEMPLATE, item.item_tax_template
 	if invoice.taxes_and_charges:
@@ -128,6 +137,18 @@ def _check_rate(account: str, code: str, expected: float, applied: float):
 		)
 
 
+def _check_effective_rate(account: str, code: str, rate: float, net: Decimal, tax: Decimal):
+	expected = net * Decimal(str(rate)) / 100
+	if abs(tax - expected) > abs(net) * ACTUAL_RATE_TOLERANCE + CENT:
+		effective = f"{tax / net * 100:.2f}%" if net else "-"
+		frappe.throw(
+			_(
+				"Line on account {0} with tax template {1} expects a rate of {2} but its tax amounts give {3}."
+			).format(account, code, f"{rate:g}%", effective),
+			frappe.ValidationError,
+		)
+
+
 def reject_write_off(invoice):
 	if _decimal(invoice.base_write_off_amount):
 		frappe.throw(
@@ -159,17 +180,25 @@ def invoice_lines(
 	expected = {}
 	totals = defaultdict(Decimal)
 	reverse_charge_keys = set()
+	actual = defaultdict(lambda: (Decimal(0), Decimal(0)))
 	for item in invoice.items:
 		account = item.get(account_field)
-		rate, tax = taxes[item.name]
-		doctype, code = _tax_code(invoice, item, account, template)
+		rate, tax, has_actual = taxes[item.name]
+		doctype, code = _tax_code(invoice, item, account, template, item.name in charged)
 		if (doctype, code) not in expected:
 			expected[doctype, code] = _expected_rate(invoice, doctype, code, accounts, excluded)
-		_check_rate(account, code, expected[doctype, code], rate)
-		key = (account_number(account), code, rate)
-		totals[key] += _decimal(item.base_net_amount) + tax
+		key = (account_number(account), code, expected[doctype, code])
+		net = _decimal(item.base_net_amount)
+		if has_actual:
+			line_net, line_tax = actual[key, account]
+			actual[key, account] = (line_net + net, line_tax + tax)
+		else:
+			_check_rate(account, code, expected[doctype, code], rate)
+		totals[key] += net + tax
 		if item.name in charged:
 			reverse_charge_keys.add(key)
+	for ((_number, code, rate), account), (net, tax) in actual.items():
+		_check_effective_rate(account, code, rate, net, tax)
 
 	sign = -1 if invoice.is_return else 1
 	lines = sorted(

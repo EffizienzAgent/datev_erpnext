@@ -195,6 +195,6 @@ class TestLines(IntegrationTestCase):
 
 	def test_unsupported_charge_type_rejected(self):
 		invoice = make_invoice(self.company, [("MIETE", 1, 100)])
-		invoice.taxes[0].charge_type = "Actual"
+		invoice.taxes[0].charge_type = "On Item Quantity"
 		with self.assertRaisesRegex(frappe.ValidationError, "charge type"):
 			sales_invoice_lines(invoice)

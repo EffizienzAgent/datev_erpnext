@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 import frappe
+from datev.intake import tax_key
 from frappe.tests import IntegrationTestCase
 
 from datev_erpnext.lines import Line, check_tax_keys, sales_invoice_lines
@@ -59,6 +60,17 @@ class TestPurchases(IntegrationTestCase):
 		lines = purchase_invoice_lines(invoice)
 		self.assertEqual(lines, [Line(f"6815:{code}:0", 6815, Decimal("1000.00"), 0, code, "H", True)])
 		check_tax_keys(make_client(self.company), lines, "Incoming")
+
+	def test_reverse_charge_template_wins_over_item_tax_template(self):
+		invoice = self._reverse_charge([("BUERO", 1, 1000)])
+		self.assertEqual(invoice.items[0].item_tax_template, self._code(INPUT_TAX))
+		self.assertEqual(invoice.base_grand_total, 1000)
+		code = self._code(REVERSE_CHARGE)
+		lines = purchase_invoice_lines(invoice)
+		self.assertEqual(lines, [Line(f"6815:{code}:0", 6815, Decimal("1000.00"), 0, code, "H", True)])
+		client = make_client(self.company)
+		check_tax_keys(client, lines, "Incoming")
+		self.assertEqual(tax_key(client.name, code, "Incoming"), "94")
 
 	def test_reverse_charge_without_bu_key_rejected(self):
 		client = make_client(self.company)
