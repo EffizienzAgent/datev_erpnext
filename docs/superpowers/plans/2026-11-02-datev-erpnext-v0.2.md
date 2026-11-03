@@ -6,9 +6,9 @@
 
 **Architecture:** Changes in `sync.py`, `lines.py`, `parties.py`, `images.py`, a new script report and a daily scheduler job. Release 0.2.0 via release-please; pin the core to its 0.2.0 release once published (Task 4).
 
-**Tech Stack:** ERPNext/Frappe v16, core app `datev` (local `/Users/tobi/Projekte/frappe-datev`), dev bench `dev/compose.yaml`.
+**Tech Stack:** ERPNext/Frappe v16, core app `datev` (local `../frappe-datev`), dev bench `dev/compose.yaml`.
 
-**Spec:** `/Users/tobi/Projekte/frappe-datev/docs/superpowers/specs/2026-11-02-datev-app-design.md` (ERPNext adapter, anti-goals). Review source: `/Users/tobi/Projekte/NORO/docs/datev-offene-punkte.md`.
+**Spec:** `docs/superpowers/specs/2026-11-02-datev-app-design.md` (ERPNext adapter, anti-goals). Review source: the pre-go-live review of v0.1.0.
 
 ## Global Constraints
 

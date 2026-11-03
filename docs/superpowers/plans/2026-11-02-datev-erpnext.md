@@ -6,9 +6,9 @@
 
 **Architecture:** A small ERPNext app (GPL-3) that depends on `erpnext` and `datev`. A `doc_events` hook enqueues a sync job after a Sales Invoice is submitted; the job resolves the DATEV Client for the invoice's company, ensures the customer's party account, renders the document image, and calls `datev.intake.upsert_document` and `datev.intake.add_booking`. A `before_cancel` hook blocks hard cancels once the document is in DATEV. Settings live in one single doctype.
 
-**Tech Stack:** Frappe v16, ERPNext v16, the `datev` core app (local repo `/Users/tobi/Projekte/frappe-datev`, GitHub `EffizienzAgent/datev`), optional `eu_einvoice`, Python 3.14, Docker dev bench.
+**Tech Stack:** Frappe v16, ERPNext v16, the `datev` core app (local repo `../frappe-datev`, GitHub `EffizienzAgent/datev`), optional `eu_einvoice`, Python 3.14, Docker dev bench.
 
-**Spec:** `/Users/tobi/Projekte/frappe-datev/docs/superpowers/specs/2026-11-02-datev-app-design.md` (sections "Two apps", "ERPNext adapter", "Flow", "Duplicate protection and corrections"). Core integration guide: `/Users/tobi/Projekte/frappe-datev/docs/integration.md` and `datev/intake.py` in the core repo.
+**Spec:** `docs/superpowers/specs/2026-11-02-datev-app-design.md` (sections "Two apps", "ERPNext adapter", "Flow", "Duplicate protection and corrections"). Core integration guide: `docs/integration.md` and `datev/intake.py` in the core repo.
 
 ## Global Constraints
 
@@ -17,7 +17,7 @@
 - No code copied from other DATEV or e-invoicing apps (only calling `eu_einvoice`'s public function when installed).
 - English code, docs, commits; every user-facing string translatable, German translations in `datev_erpnext/locale/de.po`. Use "Stornorechnung" (never "Gutschrift") in German.
 - No client or customer names anywhere in the repo. Test data uses DATEV sample numbers (consultant 29098, client 55003) and fictitious companies.
-- Conventions as the core repo: flit/pyproject, ruff config identical to `/Users/tobi/Projekte/frappe-datev/pyproject.toml`, release-please, `version-16` branch, CI with bench + MariaDB, tests under `datev_erpnext/tests`, `frappe.tests.IntegrationTestCase`.
+- Conventions as the core repo: flit/pyproject, ruff config identical to `../frappe-datev/pyproject.toml`, release-please, `version-16` branch, CI with bench + MariaDB, tests under `datev_erpnext/tests`, `frappe.tests.IntegrationTestCase`.
 - The adapter writes to DATEV only through `datev.intake` (never creates DATEV Document/Booking records directly).
 - Amounts: company currency (`base_*` fields). Gross per line = net + tax of that line; the sum of all lines of an invoice equals `abs(base_grand_total)` (rounding difference added to the largest line).
 - Sync is idempotent: re-running for the same invoice never creates a second document or booking (source key `"Sales Invoice:<name>"`, line keys stable per revenue account + tax code + rate).
@@ -60,9 +60,9 @@ datev_erpnext/tests/{factories.py,test_*.py}
 **Files:** all top-level files above; `datev_erpnext/{__init__.py,hooks.py,modules.txt,patches.txt,setup.py}`, `datev_erpnext/datev_erpnext/__init__.py`, `datev_erpnext/tests/{__init__.py,test_install.py}`
 
 **Interfaces:**
-- Copy-adapt from `/Users/tobi/Projekte/frappe-datev`: pyproject (name `datev_erpnext`, description "ERPNext adapter for the datev app: Sales Invoices to DATEV with Beleglink"), editorconfig, gitignore, gitattributes, renovate (managers for frappe, erpnext, datev, eu_einvoice, frappe-bench), release-please files (`{".": "0.1.0"}`), `release.yml` unchanged, `test.yml` extended: bench init at the pinned Frappe commit, then `bench get-app` ERPNext, datev and eu_einvoice at their pinned commits (same init-fetch-checkout pattern as the core's dev bootstrap), install erpnext, datev, eu_einvoice, datev_erpnext, run tests.
+- Copy-adapt from `../frappe-datev`: pyproject (name `datev_erpnext`, description "ERPNext adapter for the datev app: Sales Invoices to DATEV with Beleglink"), editorconfig, gitignore, gitattributes, renovate (managers for frappe, erpnext, datev, eu_einvoice, frappe-bench), release-please files (`{".": "0.1.0"}`), `release.yml` unchanged, `test.yml` extended: bench init at the pinned Frappe commit, then `bench get-app` ERPNext, datev and eu_einvoice at their pinned commits (same init-fetch-checkout pattern as the core's dev bootstrap), install erpnext, datev, eu_einvoice, datev_erpnext, run tests.
 - `.github/versions.env`: `FRAPPE_BRANCH=version-16`, `FRAPPE_COMMIT` = the core repo's value; `ERPNEXT_BRANCH=version-16` + `ERPNEXT_COMMIT` = a current version-16 commit of `https://github.com/frappe/erpnext` that installs on that Frappe commit; `DATEV_BRANCH=main` + `DATEV_COMMIT` = current HEAD of `https://github.com/EffizienzAgent/datev` (if the push has not happened yet, use the local repo's HEAD sha and note it); `EU_EINVOICE_BRANCH=version-16` + commit from `https://github.com/alyf-de/eu_einvoice`.
-- dev bench: copy-adapt `/Users/tobi/Projekte/frappe-datev/dev/*` — compose project `frappe-datev-erpnext`, host port `8011:8000`, mounts `..:/workspace/frappe-datev-erpnext` and `/Users/tobi/Projekte/frappe-datev:/workspace/frappe-datev`; bootstrap installs erpnext + eu_einvoice from pinned commits, `bench get-app --soft-link /workspace/frappe-datev` and `/workspace/frappe-datev-erpnext`, site `datev-erpnext.test`, installs erpnext, eu_einvoice, datev, datev_erpnext (erpnext setup wizard skipped: create a test company in tests).
+- dev bench: copy-adapt `../frappe-datev/dev/*` — compose project `frappe-datev-erpnext`, host port `8011:8000`, mounts `..:/workspace/frappe-datev-erpnext` and `../frappe-datev:/workspace/frappe-datev`; bootstrap installs erpnext + eu_einvoice from pinned commits, `bench get-app --soft-link /workspace/frappe-datev` and `/workspace/frappe-datev-erpnext`, site `datev-erpnext.test`, installs erpnext, eu_einvoice, datev, datev_erpnext (erpnext setup wizard skipped: create a test company in tests).
 - `hooks.py`: metadata, `required_apps = ["erpnext", "datev"]`, `after_install`/`after_migrate` → `datev_erpnext.setup.apply_defaults` (no-op placeholder that later tasks fill).
 
 - [ ] Step 1: write scaffold + `test_install.py` (`test_app_installed`, `test_core_installed` asserting `"datev"` and `"erpnext"` in installed apps).
