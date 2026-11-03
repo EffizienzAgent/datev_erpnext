@@ -92,7 +92,7 @@ Without a file, the invoice is not sent and gets the comment `DATEV note: no sup
 
 **Turning it on later:** the switch is not limited to new invoices. The daily catch-up sends every submitted Purchase Invoice with a posting date on or after **Sync from date** that is not in DATEV yet. If you booked supplier invoices in DATEV by hand until now, set **Sync from date** past them first or they are booked twice.
 
-Belegfeld 1 is the supplier invoice number (`bill_no`), which is required. Add one row per purchase tax code to the client's tax keys; set its direction to `Incoming` if the same template is used on sales invoices with a different BU key. A reverse charge template needs a BU key (see [mapping](mapping.md#reverse-charge)). Cancelling works like for sales invoices: blocked once the document is uploaded, correct with a debit note instead.
+Belegfeld 1 is the supplier invoice number (`bill_no`), which is required. Add one row per purchase tax code to the client's tax keys; set its direction to `Incoming` if the same template is used on sales invoices with a different BU key. A reverse charge template needs a BU key (see [mapping](mapping.md#reverse-charge)). For invoices created from an E Invoice Import see [e-invoice imports](mapping.md#e-invoice-imports). Cancelling works like for sales invoices: blocked once the document is uploaded, correct with a debit note instead.
 
 ## Payments
 
