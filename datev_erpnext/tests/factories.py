@@ -3,6 +3,7 @@ from frappe.utils import getdate, nowdate
 
 COMPANY_NAME = "Datev Test GmbH"
 CUSTOMER_NAME = "Muster Automaten GmbH"
+SUPPLIER_NAME = "Muster Lieferant GmbH"
 TAX_ID = "DE123456789"
 PRICE_LIST = "Standard Selling"
 ACCOUNT_TEMPLATE = "DE 19 % alle Konten"
@@ -15,7 +16,21 @@ ACCOUNTS = (
 	("USt 7 %", "3801", "Tax", "Duties and Taxes", 7),
 	("Vorsteuer 19 %", "1406", "Tax", "Tax Assets", 19),
 	("Forderungen aus Lieferungen und Leistungen", "1200", "Receivable", "Accounts Receivable", 0),
+	("Verbindlichkeiten aus Lieferungen und Leistungen", "3300", "Payable", "Accounts Payable", 0),
+	("Geleistete Anzahlungen", "1186", "Payable", "Loans and Advances (Assets)", 0),
+	("Erhaltene Anzahlungen", "3250", "Receivable", "Current Liabilities", 0),
+	("Bank", "1800", "Bank", "Bank Accounts", 0),
+	("Sparkasse", "1810", "Bank", "Bank Accounts", 0),
+	("Nebenkosten des Geldverkehrs", "6855", "Expense Account", "Indirect Expenses", 0),
+	("Bürobedarf", "6815", "Expense Account", "Indirect Expenses", 0),
+	("Porto", "6800", "Expense Account", "Indirect Expenses", 0),
+	("Abziehbare Vorsteuer nach § 13b UStG 19 %", "1407", "Tax", "Tax Assets", 19),
+	("Umsatzsteuer nach § 13b UStG 19 %", "3837", "Tax", "Duties and Taxes", 19),
 )
+BUYING_PRICE_LIST = "Standard Buying"
+INPUT_TAX = "DE Vorsteuer 19 %"
+INPUT_TAX_FREE = "DE Vorsteuer frei"
+REVERSE_CHARGE = "DE Reverse Charge 19 %"
 
 
 def make_company(abbr="DTV") -> str:
@@ -37,7 +52,9 @@ def make_company(abbr="DTV") -> str:
 	_ensure_fiscal_year(company)
 	_ensure_templates(company)
 	_ensure_items(company)
+	_ensure_purchase_items(company)
 	_ensure_customer()
+	_ensure_supplier()
 	return company.name
 
 
@@ -54,12 +71,28 @@ def _ensure_masters():
 				"enabled": 1,
 			}
 		).insert()
+	if not frappe.db.exists("Price List", BUYING_PRICE_LIST):
+		frappe.get_doc(
+			{
+				"doctype": "Price List",
+				"price_list_name": BUYING_PRICE_LIST,
+				"currency": "EUR",
+				"buying": 1,
+				"enabled": 1,
+			}
+		).insert()
 	if not frappe.db.exists("Warehouse Type", "Transit"):
 		frappe.get_doc({"doctype": "Warehouse Type", "name": "Transit"}).insert()
+	for party_type, account_type in (("Customer", "Receivable"), ("Supplier", "Payable")):
+		if not frappe.db.exists("Party Type", party_type):
+			frappe.get_doc(
+				{"doctype": "Party Type", "party_type": party_type, "account_type": account_type}
+			).insert()
 	for doctype, field, root, leaf in (
 		("Item Group", "item_group_name", "All Item Groups", "Services"),
 		("Customer Group", "customer_group_name", "All Customer Groups", "Commercial"),
 		("Territory", "territory_name", "All Territories", "Germany"),
+		("Supplier Group", "supplier_group_name", "All Supplier Groups", "Services"),
 	):
 		if not frappe.db.exists(doctype, root):
 			frappe.get_doc({"doctype": doctype, field: root, "is_group": 1}).insert()
@@ -85,13 +118,17 @@ def _ensure_accounts(company):
 				"is_group": 0,
 			}
 		).insert()
-	receivable = _account(company, "1200")
-	if company.default_receivable_account != receivable:
-		company.db_set("default_receivable_account", receivable)
+	for field, number in (("default_receivable_account", "1200"), ("default_payable_account", "3300")):
+		if company.get(field) != _account(company, number):
+			company.db_set(field, _account(company, number))
 
 
 def _account(company, number) -> str:
-	return frappe.db.get_value("Account", {"company": company.name, "account_number": number}, "name")
+	return account(company.name, number)
+
+
+def account(company: str, number: str) -> str:
+	return frappe.db.get_value("Account", {"company": company, "account_number": number}, "name")
 
 
 def _ensure_fiscal_year(company):
@@ -144,6 +181,47 @@ def _ensure_templates(company):
 				}
 			).insert()
 	_ensure_account_template(company)
+	_ensure_purchase_templates(company)
+
+
+def _ensure_purchase_templates(company):
+	abbr = company.abbr
+	input_tax = _account(company, "1406")
+	for rate, title in ((19, INPUT_TAX), (0, INPUT_TAX_FREE)):
+		if not frappe.db.exists("Item Tax Template", f"{title} - {abbr}"):
+			frappe.get_doc(
+				{
+					"doctype": "Item Tax Template",
+					"title": title,
+					"company": company.name,
+					"taxes": [{"tax_type": input_tax, "tax_rate": rate}],
+				}
+			).insert()
+	templates = (
+		(INPUT_TAX, [("Add", input_tax, 19)]),
+		(REVERSE_CHARGE, [("Add", _account(company, "1407"), 19), ("Deduct", _account(company, "3837"), 19)]),
+	)
+	for title, rows in templates:
+		if frappe.db.exists("Purchase Taxes and Charges Template", f"{title} - {abbr}"):
+			continue
+		frappe.get_doc(
+			{
+				"doctype": "Purchase Taxes and Charges Template",
+				"title": title,
+				"company": company.name,
+				"taxes": [
+					{
+						"category": "Total",
+						"add_deduct_tax": add_deduct,
+						"charge_type": "On Net Total",
+						"account_head": account_head,
+						"description": title,
+						"rate": rate,
+					}
+					for add_deduct, account_head, rate in rows
+				],
+			}
+		).insert()
 
 
 def _ensure_account_template(company):
@@ -187,6 +265,29 @@ def _ensure_items(company):
 		).insert()
 
 
+def _ensure_purchase_items(company):
+	for code, number, template in (
+		("BUERO", "6815", f"{INPUT_TAX} - {company.abbr}"),
+		("PORTO", "6800", f"{INPUT_TAX_FREE} - {company.abbr}"),
+		("FREMD", "6815", None),
+	):
+		if frappe.db.exists("Item", code):
+			continue
+		frappe.get_doc(
+			{
+				"doctype": "Item",
+				"item_code": code,
+				"item_name": code,
+				"item_group": "Services",
+				"stock_uom": "Nos",
+				"is_stock_item": 0,
+				"is_purchase_item": 1,
+				"item_defaults": [{"company": company.name, "expense_account": _account(company, number)}],
+				"taxes": [{"item_tax_template": template}] if template else [],
+			}
+		).insert()
+
+
 def _ensure_customer():
 	if frappe.db.exists("Customer", {"customer_name": CUSTOMER_NAME}):
 		return
@@ -200,6 +301,29 @@ def _ensure_customer():
 			"tax_id": TAX_ID,
 		}
 	).insert()
+
+
+def _ensure_supplier():
+	if frappe.db.exists("Supplier", {"supplier_name": SUPPLIER_NAME}):
+		return
+	frappe.get_doc(
+		{
+			"doctype": "Supplier",
+			"supplier_name": SUPPLIER_NAME,
+			"supplier_type": "Company",
+			"supplier_group": "Services",
+			"country": "Germany",
+			"tax_id": "DE987654321",
+		}
+	).insert()
+
+
+def customer() -> str:
+	return frappe.db.get_value("Customer", {"customer_name": CUSTOMER_NAME})
+
+
+def supplier() -> str:
+	return frappe.db.get_value("Supplier", {"supplier_name": SUPPLIER_NAME})
 
 
 def make_client(company, **overrides):
@@ -221,6 +345,9 @@ def make_client(company, **overrides):
 		"tax_keys": [
 			{"tax_code": f"DE 19 % - {abbr}", "bu_key": ""},
 			{"tax_code": f"DE steuerfrei - {abbr}", "bu_key": ""},
+			{"tax_code": f"{INPUT_TAX} - {abbr}", "bu_key": ""},
+			{"tax_code": f"{INPUT_TAX_FREE} - {abbr}", "bu_key": ""},
+			{"tax_code": f"{REVERSE_CHARGE} - {abbr}", "bu_key": "94"},
 		],
 	}
 	values.update(overrides)
@@ -250,5 +377,102 @@ def make_invoice(company, items, **overrides):
 		row.item_tax_template = template
 	if not invoice.taxes:
 		invoice.taxes_and_charges = f"DE 19 % - {frappe.db.get_value('Company', company, 'abbr')}"
+		invoice.append_taxes_from_master()
+	return invoice.insert()
+
+
+def make_payment(company, references=(), amount=None, deductions=(), **overrides):
+	payment_type = overrides.pop("payment_type", "Receive")
+	party_type = overrides.pop("party_type", "Customer" if payment_type == "Receive" else "Supplier")
+	party = overrides.pop("party", customer() if party_type == "Customer" else supplier())
+	party_account = account(company, "1200" if party_type == "Customer" else "3300")
+	bank = account(company, "1800")
+	fee = sum(value for _number, value in deductions)
+	paid = amount if amount is not None else sum(allocated for _name, allocated in references) - fee
+	values = {
+		"doctype": "Payment Entry",
+		"company": company,
+		"payment_type": payment_type,
+		"posting_date": nowdate(),
+		"party_type": party_type,
+		"party": party,
+		"paid_from": party_account if payment_type == "Receive" else bank,
+		"paid_to": bank if payment_type == "Receive" else party_account,
+		"paid_amount": paid,
+		"received_amount": paid,
+		"reference_no": "Bank",
+		"reference_date": nowdate(),
+		"references": [
+			{
+				"reference_doctype": "Sales Invoice" if party_type == "Customer" else "Purchase Invoice",
+				"reference_name": name,
+				"allocated_amount": allocated,
+			}
+			for name, allocated in references
+		],
+		"deductions": [
+			{
+				"account": account(company, number),
+				"cost_center": frappe.get_cached_value("Company", company, "cost_center"),
+				"amount": value,
+			}
+			for number, value in deductions
+		],
+	}
+	values.update(overrides)
+	payment = frappe.get_doc(values)
+	payment.setup_party_account_field()
+	payment.set_missing_values()
+	payment.set_missing_ref_details()
+	return payment.insert()
+
+
+def make_journal(company, rows, **overrides):
+	values = {
+		"doctype": "Journal Entry",
+		"company": company,
+		"posting_date": nowdate(),
+		"cheque_no": "Bank",
+		"cheque_date": nowdate(),
+		"accounts": [
+			{
+				"account": account(company, number),
+				"debit_in_account_currency": debit,
+				"credit_in_account_currency": credit,
+				"cost_center": frappe.get_cached_value("Company", company, "cost_center"),
+				**extra,
+			}
+			for number, debit, credit, *rest in rows
+			for extra in [rest[0] if rest else {}]
+		],
+	}
+	values.update(overrides)
+	return frappe.get_doc(values).insert()
+
+
+def make_purchase_invoice(company, items, **overrides):
+	abbr = frappe.db.get_value("Company", company, "abbr")
+	values = {
+		"doctype": "Purchase Invoice",
+		"company": company,
+		"supplier": supplier(),
+		"bill_no": f"LR-{frappe.generate_hash(length=6)}",
+		"bill_date": nowdate(),
+		"currency": "EUR",
+		"buying_price_list": BUYING_PRICE_LIST,
+		"posting_date": nowdate(),
+		"set_posting_time": 1,
+		"items": [{"item_code": code, "qty": qty, "rate": rate} for code, qty, rate in items],
+	}
+	values.update(overrides)
+	invoice = frappe.get_doc(values)
+	invoice.set_missing_values()
+	for row in invoice.items:
+		if not row.item_tax_template:
+			row.item_tax_template = frappe.db.get_value(
+				"Item Tax", {"parent": row.item_code, "parenttype": "Item"}, "item_tax_template"
+			)
+	if not invoice.taxes:
+		invoice.taxes_and_charges = invoice.taxes_and_charges or f"{INPUT_TAX} - {abbr}"
 		invoice.append_taxes_from_master()
 	return invoice.insert()

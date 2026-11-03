@@ -4,11 +4,21 @@ EINVOICE_APP = "eu_einvoice"
 EINVOICE_FUNCTION = "eu_einvoice.european_e_invoice.custom.sales_invoice.attach_xml_to_pdf"
 
 
-def document_image(invoice) -> tuple[str, bytes]:
+SUPPLIER_FILE_TYPES = ("pdf", "xml")
+
+
+def _hook_image(invoice) -> tuple[str, bytes] | None:
 	for path in frappe.get_hooks("datev_erpnext_document_image"):
 		result = frappe.get_attr(path)(invoice)
 		if result is not None:
 			return result
+	return None
+
+
+def document_image(invoice) -> tuple[str, bytes]:
+	result = _hook_image(invoice)
+	if result is not None:
+		return result
 	settings = frappe.get_single("DATEV ERPNext Settings")
 	if settings.document_image_source == "Latest attached PDF":
 		attached = _latest_attached_pdf(invoice)
@@ -28,10 +38,57 @@ def _latest_attached_pdf(invoice) -> bytes | None:
 		order_by="creation desc",
 		limit=1,
 	)
-	if not files:
-		return None
-	with open(frappe.get_doc("File", files[0].name).get_full_path(), "rb") as handle:
+	return _read(files[0].name) if files else None
+
+
+def _read(file: str) -> bytes:
+	with open(frappe.get_doc("File", file).get_full_path(), "rb") as handle:
 		return handle.read()
+
+
+def purchase_document_image(invoice) -> tuple[str, bytes] | None:
+	result = _hook_image(invoice)
+	if result is not None:
+		return result
+	for file in (_einvoice_file(invoice), _latest_supplier_file(invoice)):
+		if file:
+			return file.file_name, _read(file.name)
+	if invoice.is_return:
+		pdf = frappe.get_print("Purchase Invoice", invoice.name, as_pdf=True)
+		return invoice.name + ".pdf", pdf
+	return None
+
+
+def _einvoice_file(invoice):
+	if EINVOICE_APP not in frappe.get_installed_apps() or not invoice.get("e_invoice_import"):
+		return None
+	url = frappe.db.get_value("E Invoice Import", invoice.e_invoice_import, "einvoice")
+	if not url:
+		return None
+	files = frappe.get_all(
+		"File",
+		filters={"file_url": url},
+		fields=["name", "file_name", "attached_to_name"],
+		order_by="creation desc",
+	)
+	files.sort(key=lambda file: file.attached_to_name != invoice.e_invoice_import)
+	return files[0] if files else None
+
+
+def _latest_supplier_file(invoice):
+	files = frappe.get_all(
+		"File",
+		filters={"attached_to_doctype": "Purchase Invoice", "attached_to_name": invoice.name, "is_folder": 0},
+		fields=["name", "file_name"],
+		order_by="creation desc, name desc",
+	)
+	return next((file for file in files if _is_supplier_file(file.file_name or "", invoice.name)), None)
+
+
+def _is_supplier_file(file_name: str, invoice_name: str) -> bool:
+	if file_name.lower().startswith(invoice_name.lower()):
+		return False
+	return file_name.rsplit(".", 1)[-1].lower() in SUPPLIER_FILE_TYPES
 
 
 def _printed_pdf(invoice, print_format) -> bytes:

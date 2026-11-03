@@ -25,9 +25,15 @@
   "enabled",
   "sync_from_date",
   "customer_number_field",
+  "supplier_number_field",
   "document_image_source",
   "print_format",
-  "posting_text_template"
+  "posting_text_template",
+  "payments_section",
+  "sync_payments",
+  "purchases_section",
+  "sync_purchase_invoices",
+  "purchase_posting_text_template"
  ],
  "fields": [
   {
@@ -47,6 +53,12 @@
    "fieldtype": "Data",
    "label": "Customer Number Field",
    "description": "Fieldname on Customer used as preferred debtor number. Leave empty to let the DATEV app assign numbers."
+  },
+  {
+   "fieldname": "supplier_number_field",
+   "fieldtype": "Data",
+   "label": "Supplier Number Field",
+   "description": "Fieldname on Supplier used as preferred creditor number. Leave empty to let the DATEV app assign numbers."
   },
   {
    "fieldname": "document_image_source",
@@ -69,6 +81,37 @@
    "label": "Posting Text Template",
    "default": "{customer_name}",
    "description": "Placeholders: {customer_name}, {name}, {po_no}. The DATEV app cuts the result to 60 characters."
+  },
+  {
+   "fieldname": "payments_section",
+   "fieldtype": "Section Break",
+   "label": "Payments"
+  },
+  {
+   "fieldname": "sync_payments",
+   "fieldtype": "Check",
+   "label": "Sync Payments",
+   "default": "0",
+   "description": "Send submitted Payment Entries and Journal Entries with a bank or cash account to DATEV, from the sync from date on."
+  },
+  {
+   "fieldname": "purchases_section",
+   "fieldtype": "Section Break",
+   "label": "Purchase Invoices"
+  },
+  {
+   "fieldname": "sync_purchase_invoices",
+   "fieldtype": "Check",
+   "label": "Sync Purchase Invoices",
+   "default": "0",
+   "description": "Send submitted Purchase Invoices with the supplier's document to DATEV, from the sync from date on. Also releases supplier payment lines for these invoices."
+  },
+  {
+   "fieldname": "purchase_posting_text_template",
+   "fieldtype": "Data",
+   "label": "Purchase Posting Text Template",
+   "default": "{supplier_name}",
+   "description": "Placeholders: {supplier_name}, {bill_no}, {bill_date}, {name}. The DATEV app cuts the result to 60 characters."
   }
  ]
 }

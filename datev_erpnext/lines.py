@@ -9,6 +9,7 @@ CENT = Decimal("0.01")
 RATE_TOLERANCE = 0.001
 ITEM_TAX_TEMPLATE = "Item Tax Template"
 SALES_TAX_TEMPLATE = "Sales Taxes and Charges Template"
+PURCHASE_TAX_TEMPLATE = "Purchase Taxes and Charges Template"
 ON_NET_TOTAL = "On Net Total"
 
 
@@ -20,13 +21,14 @@ class Line:
 	tax_rate: float
 	tax_code: str
 	debit_credit: str
+	reverse_charge: bool = False
 
 
 def _decimal(value) -> Decimal:
 	return Decimal(str(value or 0)).quantize(CENT)
 
 
-def _account_number(account: str) -> int:
+def account_number(account: str) -> int:
 	number = frappe.get_cached_value("Account", account, "account_number")
 	try:
 		return int(str(number).strip())
@@ -38,8 +40,8 @@ def _is_tax_account(account: str) -> bool:
 	return frappe.get_cached_value("Account", account, "account_type") == "Tax"
 
 
-def _tax_rows(invoice) -> dict[str, str]:
-	tax_rows = {}
+def tax_rows(invoice) -> dict[str, str]:
+	rows = {}
 	for tax in invoice.get("taxes") or []:
 		amount = _decimal(tax.base_tax_amount_after_discount_amount)
 		if _is_tax_account(tax.account_head):
@@ -50,19 +52,19 @@ def _tax_rows(invoice) -> dict[str, str]:
 					),
 					frappe.ValidationError,
 				)
-			tax_rows[tax.name] = tax.account_head
+			rows[tax.name] = tax.account_head
 		elif amount:
 			frappe.throw(
 				_("Charges on account {0} are not supported yet").format(tax.account_head),
 				frappe.ValidationError,
 			)
-	return tax_rows
+	return rows
 
 
-def _item_taxes(invoice, tax_rows: dict[str, str]) -> dict[str, tuple[float, Decimal]]:
+def _item_taxes(invoice, rows: dict[str, str]) -> dict[str, tuple[float, Decimal]]:
 	taxes = defaultdict(lambda: (0.0, Decimal(0)))
 	for row in invoice.get("item_wise_tax_details") or []:
-		if row.tax_row not in tax_rows:
+		if row.tax_row not in rows:
 			continue
 		rate, amount = taxes[row.item_row]
 		taxes[row.item_row] = (rate + (row.rate or 0), amount + _decimal(row.amount))
@@ -73,17 +75,20 @@ def _opposite(side: str) -> str:
 	return "S" if side == "H" else "H"
 
 
-def _tax_code(invoice, item) -> tuple[str, str]:
+def _tax_code(invoice, item, account: str, template: str) -> tuple[str, str]:
 	if item.item_tax_template:
 		return ITEM_TAX_TEMPLATE, item.item_tax_template
 	if invoice.taxes_and_charges:
-		return SALES_TAX_TEMPLATE, invoice.taxes_and_charges
-	frappe.throw(
-		_(
+		return template, invoice.taxes_and_charges
+	if template == SALES_TAX_TEMPLATE:
+		message = _(
 			"Line on account {0} has no tax template. Set an item tax template or a sales taxes template."
-		).format(item.income_account),
-		frappe.ValidationError,
-	)
+		)
+	else:
+		message = _(
+			"Line on account {0} has no tax template. Set an item tax template or a purchase taxes template."
+		)
+	frappe.throw(message.format(account), frappe.ValidationError)
 
 
 def _template_rates(doctype: str, name: str) -> list[tuple[str, float]]:
@@ -91,12 +96,16 @@ def _template_rates(doctype: str, name: str) -> list[tuple[str, float]]:
 	if doctype == ITEM_TAX_TEMPLATE:
 		rows = [(row.tax_type, row.tax_rate) for row in template.taxes if not row.not_applicable]
 	else:
-		rows = [(row.account_head, row.rate) for row in template.taxes if row.charge_type == ON_NET_TOTAL]
+		rows = [
+			(row.account_head, -row.rate if row.get("add_deduct_tax") == "Deduct" else row.rate)
+			for row in template.taxes
+			if row.charge_type == ON_NET_TOTAL
+		]
 	return [(account, rate or 0) for account, rate in rows if _is_tax_account(account)]
 
 
-def _expected_rate(invoice, doctype: str, name: str, accounts: set[str]) -> float:
-	rates = _template_rates(doctype, name)
+def _expected_rate(invoice, doctype: str, name: str, accounts: set[str], excluded: set[str]) -> float:
+	rates = [(account, rate) for account, rate in _template_rates(doctype, name) if account not in excluded]
 	on_invoice = [rate for account, rate in rates if account in accounts]
 	if not on_invoice and any(rate for _account, rate in rates):
 		frappe.throw(
@@ -108,37 +117,60 @@ def _expected_rate(invoice, doctype: str, name: str, accounts: set[str]) -> floa
 	return sum(on_invoice)
 
 
-def _check_rate(item, code: str, expected: float, applied: float):
+def _check_rate(account: str, code: str, expected: float, applied: float):
 	if abs(expected - applied) > RATE_TOLERANCE:
 		frappe.throw(
 			_("Line on account {0} with tax template {1} expects a rate of {2} but {3} is applied.").format(
-				item.income_account, code, f"{expected:g}%", f"{applied:g}%"
+				account, code, f"{expected:g}%", f"{applied:g}%"
 			),
 			frappe.ValidationError,
 		)
 
 
-def sales_invoice_lines(invoice) -> list[Line]:
+def reject_write_off(invoice):
 	if _decimal(invoice.base_write_off_amount):
 		frappe.throw(
 			_("Invoice {0} has a write-off. Write-offs are not supported yet.").format(invoice.name),
 			frappe.ValidationError,
 		)
-	tax_rows = _tax_rows(invoice)
-	accounts = set(tax_rows.values())
-	taxes = _item_taxes(invoice, tax_rows)
+
+
+def sales_invoice_lines(invoice) -> list[Line]:
+	reject_write_off(invoice)
+	return invoice_lines(
+		invoice, "income_account", SALES_TAX_TEMPLATE, debit_credit(invoice), tax_rows(invoice)
+	)
+
+
+def invoice_lines(
+	invoice,
+	account_field: str,
+	template: str,
+	side: str,
+	rows: dict[str, str],
+	reverse_charge: frozenset[str] = frozenset(),
+) -> list[Line]:
+	regular = {name: account for name, account in rows.items() if name not in reverse_charge}
+	accounts = set(regular.values())
+	excluded = {rows[name] for name in reverse_charge}
+	taxes = _item_taxes(invoice, regular)
+	charged = _reverse_charge_items(invoice, reverse_charge)
 	expected = {}
 	totals = defaultdict(Decimal)
+	reverse_charge_keys = set()
 	for item in invoice.items:
+		account = item.get(account_field)
 		rate, tax = taxes[item.name]
-		doctype, code = _tax_code(invoice, item)
+		doctype, code = _tax_code(invoice, item, account, template)
 		if (doctype, code) not in expected:
-			expected[doctype, code] = _expected_rate(invoice, doctype, code, accounts)
-		_check_rate(item, code, expected[doctype, code], rate)
-		totals[_account_number(item.income_account), code, rate] += _decimal(item.base_net_amount) + tax
+			expected[doctype, code] = _expected_rate(invoice, doctype, code, accounts, excluded)
+		_check_rate(account, code, expected[doctype, code], rate)
+		key = (account_number(account), code, rate)
+		totals[key] += _decimal(item.base_net_amount) + tax
+		if item.name in charged:
+			reverse_charge_keys.add(key)
 
 	sign = -1 if invoice.is_return else 1
-	side = debit_credit(invoice)
 	lines = sorted(
 		(
 			Line(
@@ -148,6 +180,7 @@ def sales_invoice_lines(invoice) -> list[Line]:
 				rate,
 				code,
 				side if amount * sign >= 0 else _opposite(side),
+				(number, code, rate) in reverse_charge_keys,
 			)
 			for (number, code, rate), amount in totals.items()
 			if amount
@@ -157,6 +190,14 @@ def sales_invoice_lines(invoice) -> list[Line]:
 	if lines:
 		_apply_rounding(invoice, lines, sign, side)
 	return lines
+
+
+def _reverse_charge_items(invoice, reverse_charge: frozenset[str]) -> set[str]:
+	return {
+		row.item_row
+		for row in invoice.get("item_wise_tax_details") or []
+		if row.tax_row in reverse_charge and _decimal(row.amount)
+	}
 
 
 def _total(invoice) -> Decimal:
@@ -190,3 +231,22 @@ def _apply_rounding(invoice, lines: list[Line], sign: int, side: str):
 
 def debit_credit(invoice) -> str:
 	return "H" if invoice.is_return else "S"
+
+
+def check_tax_keys(client, lines):
+	keys = {row.tax_code: row.bu_key for row in client.tax_keys}
+	for line in lines:
+		if line.tax_code not in keys:
+			frappe.throw(
+				_(
+					"Tax code {0} has no row in the tax keys of DATEV Client {1}. Add it to the DATEV Client's tax keys; leave the BU key empty for automatic accounts."
+				).format(line.tax_code, client.name),
+				frappe.ValidationError,
+			)
+		if line.reverse_charge and not keys[line.tax_code]:
+			frappe.throw(
+				_(
+					"Tax code {0} is a reverse charge template and needs a BU key in the tax keys of DATEV Client {1}."
+				).format(line.tax_code, client.name),
+				frappe.ValidationError,
+			)

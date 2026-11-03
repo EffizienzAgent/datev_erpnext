@@ -1,6 +1,6 @@
 # Mapping
 
-How a Sales Invoice becomes DATEV records. All amounts are in company currency (`base_*` fields).
+How Sales Invoices, Purchase Invoices and payments become DATEV records. All amounts are in company currency (`base_*` fields).
 
 ## Document
 
@@ -27,7 +27,7 @@ The lines must add up to the invoice's rounded total, considering the sides. A d
 
 ## Rejected cases
 
-The invoice is not synced, everything is rolled back, an error is logged, and a comment `DATEV: <reason>` appears on the invoice. The status indicator shows a red `DATEV: error`, and the invoice is listed in the report **Sales Invoices without DATEV**.
+The invoice is not synced, everything is rolled back, an error is logged, and a comment `DATEV: <reason>` appears on the invoice. The status indicator shows a red `DATEV: error`, and the invoice is listed in the report **Vouchers without DATEV**.
 
 | Case | Reason |
 | --- | --- |
@@ -44,11 +44,61 @@ The invoice is not synced, everything is rolled back, an error is logged, and a 
 | Zero total with lines | The invoice total is zero but its lines are not (for example a revenue line and a credit line on different accounts). DATEV cannot take a document without an amount. |
 | Client ambiguity | More than one enabled DATEV Client for the Company. |
 
+## Purchase invoices
+
+One DATEV Document per Purchase Invoice, source key `Purchase Invoice:<name>`, direction Incoming, document number = Belegfeld 1 = the supplier invoice number (`bill_no`). A debit note (return) without its own `bill_no` uses the `bill_no` of the invoice it returns, so the open item clears. Lines follow the [sales rules](#lines) with these differences:
+
+- **Account:** the item's expense account (or asset account, as ERPNext books it); the creditor of the supplier is the party account.
+- **Tax code:** item tax template, else the invoice's Purchase Taxes and Charges Template. For the expected rate, `Deduct` rows of the template count negative.
+- **Side:** an invoice is booked on the credit side (`H`) of the creditor, a debit note on the debit side (`S`).
+
+### Reverse charge
+
+Reverse charge (§ 13b UStG) and intra-EU acquisitions are expected as a template with an input tax row (`Add`) and an output tax row (`Deduct`) on Tax accounts at the same rate. The pair must come from the invoice's Purchase Taxes and Charges Template, and the `Add` account must not be a regular input tax account (one used in a template of the company without any `Deduct` row); use dedicated accounts for reverse charge input tax. Such a pair is recognised as reverse charge: the line goes out with its **net** amount and rate 0, and the tax code's row in the client's tax keys must carry a BU key (DATEV computes both taxes from it). An empty BU key is rejected.
+
+### Rejected purchase invoices
+
+| Case | Reason |
+| --- | --- |
+| No supplier invoice number | `bill_no` is empty (and, for a debit note, also on the returned invoice). |
+| Goods receipts | A line on a Stock, Stock Received But Not Billed or Asset Received But Not Billed account. Receipts are not sent to DATEV, so the clearing account would stay open there. |
+| Valuation taxes | A tax row with category `Valuation` or `Valuation and Total`. |
+| Other deductions | A `Deduct` row on a Tax account without a matching `Add` row at the same rate. |
+| Paid on the invoice | `is_paid` is set (cash or card purchases). |
+| Deferred expense | A line with deferred expense. |
+| Reverse charge without BU key | See above. |
+
+All rejected cases of sales invoices apply as well.
+
+## Payments
+
+One DATEV Document without file per voucher, source key `Payment Entry:<name>` or `Journal Entry:<name>`, direction Other, document number = voucher name. Each line is a booking of kind `Payment`.
+
+- **Bank account (pivot):** Payment Entry: `paid_to` for Receive, `paid_from` for Pay and Internal Transfer. Journal Entry: the first row on a Bank or Cash account. Its account number is the contra account of every line. A Payment Entry whose bank side is not a Bank or Cash account is rejected.
+- **Lines:** every other GL entry of the voucher, grouped by account, party and referenced voucher. Amount = |debit − credit|, side from the line's perspective (debit `S`, credit `H`). Lines with an amount of 0 are dropped. Further bank or cash rows of a Journal Entry (transfer between own accounts) are lines like any other.
+- **Konto:** the debtor or creditor of the party if the GL account is a Receivable account on the asset side (Customer) or a Payable account on the liability side (Supplier). Every other line, including separate advance accounts, employees or shareholders, books to the GL account number, which must be numeric.
+- **Allocation:** receivable and payable lines are split by the Payment Ledger, so allocations made later (Payment Reconciliation, advance allocation, Unreconcile Payment) are reflected without cancelling the voucher.
+- **Belegfeld 1:** Sales Invoice → its name; Purchase Invoice → its `bill_no` (rules as above); anything else (unallocated amount, fees, interest, transfers) → the voucher name.
+- **Dependency:** a line for an invoice on or after **Sync from date** depends on that invoice's DATEV Document and waits in the core until it is in DATEV.
+- **Posting text:** the party name, else the account name.
+- **Line key:** `<account number>:<party>:<referenced voucher>`. A changed line gets a new key with `#2`, `#3`, …; reversals use `storno:<key>`.
+
+Bank fees, interest and other deductions are booked to the account chosen in ERPNext, with or without a party.
+
+### Advances on separate advance accounts
+
+With **Book Advance Payments in Separate Party Account**, the receipt or payment itself books the advance account against the bank. When ERPNext later allocates the advance to an invoice, it moves the amount from the advance account to the receivable or payable account inside the payment, dated by the company's "Reconciliation Takes Effect On". These allocation entries do not touch the bank: each reference row of the payment becomes its own DATEV Document (source key `Payment Entry:<name>:<reference row>`, without file), dated at the allocation's posting date, with one line debtor/creditor against the advance account number and the invoice number in Belegfeld 1. Unreconciling reverses that document; cancelling the payment cancels it too.
+
+### Re-allocation and dates
+
+All lines of a payment, including reversals and new lines after a re-allocation, carry the payment's posting date (except allocations on separate advance accounts, see above). A re-allocation months later therefore books into the payment's month. If that month is locked in DATEV (Festschreibung) or its fiscal year is closed, the export of these lines fails and the bookings show up as Stuck or Failed in the DATEV status report; nothing is moved silently into another period. Decide with your tax advisor how to post such corrections.
+
 ## Not supported yet
 
-- Purchase invoices (incoming invoices).
-- Payments and bank bookings.
+- Goods receipts and stock purchases, landed costs.
+- Purchase invoices paid on the invoice (`is_paid`), deferred expense.
 - Charges outside tax accounts.
 - Write-offs.
-- Opening invoices (`is_opening`); they are skipped.
+- Opening entries (`is_opening`); they are skipped.
 - Multi-currency postings: the base amounts are sent in company currency.
+- Document images for payments: in DATEV the bank statement is the voucher.

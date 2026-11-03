@@ -91,7 +91,9 @@ class TestCatchUp(IntegrationTestCase):
 		sync.sync_sales_invoice(synced.name)
 		sync._comment(missing, "renderer down")
 
-		report = run("Sales Invoices without DATEV", filters={"company": self.company})
+		report = run(
+			"Vouchers without DATEV", filters={"company": self.company, "voucher_type": "Sales Invoice"}
+		)
 
 		self.assertIn("reason", [column["fieldname"] for column in report["columns"]])
 		reasons = {row["name"]: row["reason"] for row in report["result"]}
@@ -110,6 +112,8 @@ class TestCatchUp(IntegrationTestCase):
 	def test_report_shows_notes(self):
 		invoice = self._submitted()
 		sync._note(invoice, sync.NOT_TRANSFERRED, "no booking lines, not transferred.")
-		report = run("Sales Invoices without DATEV", filters={"company": self.company})
+		report = run(
+			"Vouchers without DATEV", filters={"company": self.company, "voucher_type": "Sales Invoice"}
+		)
 		reasons = {row["name"]: row["reason"] for row in report["result"]}
 		self.assertEqual(reasons[invoice.name], "DATEV note: no booking lines, not transferred.")
