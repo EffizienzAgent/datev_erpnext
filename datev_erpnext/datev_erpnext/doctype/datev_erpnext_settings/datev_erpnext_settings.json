@@ -30,7 +30,10 @@
   "print_format",
   "posting_text_template",
   "payments_section",
-  "sync_payments"
+  "sync_payments",
+  "purchases_section",
+  "sync_purchase_invoices",
+  "purchase_posting_text_template"
  ],
  "fields": [
   {
@@ -90,6 +93,25 @@
    "label": "Sync Payments",
    "default": "0",
    "description": "Send submitted Payment Entries and Journal Entries with a bank or cash account to DATEV, from the sync from date on."
+  },
+  {
+   "fieldname": "purchases_section",
+   "fieldtype": "Section Break",
+   "label": "Purchase Invoices"
+  },
+  {
+   "fieldname": "sync_purchase_invoices",
+   "fieldtype": "Check",
+   "label": "Sync Purchase Invoices",
+   "default": "0",
+   "description": "Send submitted Purchase Invoices with the supplier's document to DATEV, from the sync from date on. Also releases supplier payment lines for these invoices."
+  },
+  {
+   "fieldname": "purchase_posting_text_template",
+   "fieldtype": "Data",
+   "label": "Purchase Posting Text Template",
+   "default": "{supplier_name}",
+   "description": "Placeholders: {supplier_name}, {bill_no}, {bill_date}, {name}. The DATEV app cuts the result to 60 characters."
   }
  ]
 }

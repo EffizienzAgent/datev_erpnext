@@ -4,15 +4,19 @@ from frappe import _
 from frappe.utils import getdate
 
 from datev_erpnext.clients import client_for
-from datev_erpnext.images import document_image
+from datev_erpnext.images import document_image, purchase_document_image
 from datev_erpnext.lines import check_tax_keys, sales_invoice_lines
 from datev_erpnext.parties import party_account_for
 from datev_erpnext.payments import is_bank_voucher
+from datev_erpnext.purchases import document_field as purchase_document_field
+from datev_erpnext.purchases import purchase_invoice_lines
 
 SETTINGS = "DATEV ERPNext Settings"
 SALES_INVOICE = "Sales Invoice"
+PURCHASE_INVOICE = "Purchase Invoice"
 PAYMENT_DOCTYPES = ("Payment Entry", "Journal Entry")
 SYNC_JOB = "datev_erpnext.sync.sync_sales_invoice"
+PURCHASE_JOB = "datev_erpnext.sync.sync_purchase_invoice"
 PAYMENT_JOB = "datev_erpnext.payment_sync.sync_payment"
 CATCH_UP_LIMIT = 500
 ERROR = "datev_erpnext:error"
@@ -25,6 +29,12 @@ SOURCES = {
 		"party_type": "'Customer'",
 		"party": "voucher.customer",
 		"party_name": "voucher.customer_name",
+		"amount": "voucher.base_grand_total",
+	},
+	"Purchase Invoice": {
+		"party_type": "'Supplier'",
+		"party": "voucher.supplier",
+		"party_name": "voucher.supplier_name",
 		"amount": "voucher.base_grand_total",
 	},
 	"Payment Entry": {
@@ -54,6 +64,14 @@ def source_key(name: str, doctype: str = SALES_INVOICE) -> str:
 def enqueue_sync(doctype: str, name: str, **kwargs):
 	if doctype == SALES_INVOICE:
 		frappe.enqueue(SYNC_JOB, name=name, job_id=f"datev-sync-{name}", deduplicate=True, **kwargs)
+	elif doctype == PURCHASE_INVOICE:
+		frappe.enqueue(
+			PURCHASE_JOB,
+			name=name,
+			job_id=f"datev-sync-{source_key(name, doctype)}",
+			deduplicate=True,
+			**kwargs,
+		)
 	else:
 		frappe.enqueue(
 			PAYMENT_JOB,
@@ -71,6 +89,8 @@ def _enqueue(name: str, **kwargs):
 
 def synced_doctypes(settings) -> list[str]:
 	doctypes = [SALES_INVOICE]
+	if settings.sync_purchase_invoices:
+		doctypes.append(PURCHASE_INVOICE)
 	if settings.sync_payments:
 		doctypes.extend(PAYMENT_DOCTYPES)
 	return doctypes
@@ -151,7 +171,7 @@ def _add_comment(doc, subject: str, text: str):
 
 
 def before_cancel(doc, method=None):
-	key = source_key(doc.name)
+	key = source_key(doc.name, doc.doctype)
 	if frappe.db.get_value("DATEV Document", {"source_key": key}, "name", for_update=True):
 		discard_document(key)
 
@@ -163,9 +183,31 @@ def _should_sync(invoice, from_backfill: bool) -> bool:
 
 
 def sync_sales_invoice(name: str, from_backfill: bool = False) -> str | None:
+	return _sync_invoice(SALES_INVOICE, name, from_backfill)
+
+
+def sync_purchase_invoice(name: str, from_backfill: bool = False) -> str | None:
+	if not frappe.get_single(SETTINGS).sync_purchase_invoices:
+		return None
+	return _sync_invoice(PURCHASE_INVOICE, name, from_backfill)
+
+
+def _lines(invoice):
+	if invoice.doctype == PURCHASE_INVOICE:
+		return purchase_invoice_lines(invoice)
+	return sales_invoice_lines(invoice)
+
+
+def _image(invoice):
+	if invoice.doctype == PURCHASE_INVOICE:
+		return purchase_document_image(invoice)
+	return document_image(invoice)
+
+
+def _sync_invoice(doctype: str, name: str, from_backfill: bool) -> str | None:
 	if not frappe.get_single(SETTINGS).enabled:
 		return None
-	invoice = frappe.get_doc("Sales Invoice", name)
+	invoice = frappe.get_doc(doctype, name)
 	if not _should_sync(invoice, from_backfill):
 		return None
 	try:
@@ -173,43 +215,50 @@ def sync_sales_invoice(name: str, from_backfill: bool = False) -> str | None:
 		if not client:
 			_comment_if_client_disabled(invoice)
 			return None
-		if not sales_invoice_lines(invoice):
+		if not _lines(invoice):
 			_note(invoice, NOT_TRANSFERRED, _("no booking lines, not transferred."))
 			return None
-		image = document_image(invoice)
-		locked = frappe.get_doc("Sales Invoice", name, for_update=True)
+		image = _image(invoice)
+		locked = frappe.get_doc(doctype, name, for_update=True)
 		if not _should_sync(locked, from_backfill):
 			return None
 		if locked.modified != invoice.modified:
-			image = document_image(locked)
+			image = _image(locked)
+		if image is None:
+			_note(invoice, NOT_TRANSFERRED, _("no supplier document attached, not transferred."))
+			return None
 		return _sync(client, locked, image)
 	except Exception as error:
 		frappe.db.rollback()
-		frappe.log_error(f"DATEV sync failed for {name}")
+		frappe.log_error(f"DATEV sync failed for {doctype} {name}")
 		_comment(invoice, error)
 		frappe.db.commit()
 		return None
 
 
 def _sync(client, invoice, image: tuple[str, bytes]) -> str | None:
-	lines = sales_invoice_lines(invoice)
+	lines = _lines(invoice)
 	if not lines:
 		return None
 	check_tax_keys(client, lines)
 	posting_text = _posting_text(invoice)
-	party = party_account_for(client, invoice.customer)
+	purchase = invoice.doctype == PURCHASE_INVOICE
+	if purchase:
+		party = party_account_for(client, invoice.supplier, "Supplier")
+	else:
+		party = party_account_for(client, invoice.customer)
 	file_name, content = image
 	document = upsert_document(
 		client.name,
-		source_key(invoice.name),
-		direction="Outgoing",
+		source_key(invoice.name, invoice.doctype),
+		direction="Incoming" if purchase else "Outgoing",
 		file_name=file_name,
 		content=content,
 		document_date=invoice.posting_date,
-		document_number=invoice.name,
+		document_number=purchase_document_field(invoice) if purchase else invoice.name,
 		amount=abs(invoice.base_rounded_total or invoice.base_grand_total),
 		currency=frappe.get_cached_value("Company", invoice.company, "default_currency"),
-		source_doctype="Sales Invoice",
+		source_doctype=invoice.doctype,
 		source_name=invoice.name,
 		is_return=bool(invoice.is_return),
 	)
@@ -217,7 +266,7 @@ def _sync(client, invoice, image: tuple[str, bytes]) -> str | None:
 		add_booking(
 			document,
 			line.line_key,
-			kind="Outgoing Invoice",
+			kind="Incoming Invoice" if purchase else "Outgoing Invoice",
 			party_account=party,
 			contra_account=line.contra_account,
 			amount=line.amount,
@@ -231,11 +280,24 @@ def _sync(client, invoice, image: tuple[str, bytes]) -> str | None:
 
 
 def _posting_text(invoice) -> str:
-	template = frappe.get_single(SETTINGS).posting_text_template or ""
+	settings = frappe.get_single(SETTINGS)
+	if invoice.doctype == PURCHASE_INVOICE:
+		template = settings.purchase_posting_text_template or "{supplier_name}"
+		values = {
+			"supplier_name": invoice.supplier_name or "",
+			"bill_no": invoice.bill_no or "",
+			"bill_date": frappe.format(invoice.bill_date, "Date") if invoice.bill_date else "",
+			"name": invoice.name,
+		}
+	else:
+		template = settings.posting_text_template or ""
+		values = {
+			"customer_name": invoice.customer_name or "",
+			"name": invoice.name,
+			"po_no": invoice.po_no or "",
+		}
 	try:
-		return template.format(
-			customer_name=invoice.customer_name or "", name=invoice.name, po_no=invoice.po_no or ""
-		)
+		return template.format(**values)
 	except KeyError, IndexError, ValueError:
 		frappe.throw(_("The posting text template {0} is invalid").format(template), frappe.ValidationError)
 
