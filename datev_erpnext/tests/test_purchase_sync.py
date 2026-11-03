@@ -155,6 +155,15 @@ class TestPurchaseSync(IntegrationTestCase):
 		self.assertEqual(self._file_name(document), newest.file_name)
 		self.get_print.assert_not_called()
 
+	def test_generated_file_is_not_a_supplier_file(self):
+		invoice = make_purchase_invoice(self.company, [("BUERO", 1, 100)])
+		supplier_file = self._attach("Purchase Invoice", invoice.name, "lieferant.pdf", minimal_pdf())
+		frappe.db.set_value("File", supplier_file.name, "creation", "2000-01-01 00:00:00")
+		self._attach("Purchase Invoice", invoice.name, f"{invoice.name}.pdf", minimal_pdf())
+		invoice.submit()
+		document = sync.sync_purchase_invoice(invoice.name)
+		self.assertEqual(self._file_name(document), supplier_file.file_name)
+
 	def test_no_supplier_file_notice(self):
 		invoice = self._invoice(attach=False)
 		self.assertIsNone(sync.sync_purchase_invoice(invoice.name))

@@ -72,10 +72,16 @@ def voucher_lines(doctype: str, name: str) -> list[PaymentLine]:
 	return sorted(lines, key=lambda line: line.line_key)
 
 
-def _totals(voucher, pivot: str) -> dict[tuple, Decimal]:
-	totals = defaultdict(Decimal)
-	party_entries = defaultdict(list)
-	for entry in frappe.get_all(
+def allocation_rows(voucher) -> set[str]:
+	if voucher.doctype != "Payment Entry" or not voucher.get(
+		"book_advance_payments_in_separate_party_account"
+	):
+		return set()
+	return {row.name for row in voucher.references}
+
+
+def _gl_entries(voucher) -> list:
+	return frappe.get_all(
 		"GL Entry",
 		filters={"voucher_type": voucher.doctype, "voucher_no": voucher.name, "is_cancelled": 0},
 		fields=[
@@ -86,10 +92,49 @@ def _totals(voucher, pivot: str) -> dict[tuple, Decimal]:
 			"against_voucher",
 			"debit",
 			"credit",
+			"voucher_detail_no",
+			"posting_date",
 		],
 		order_by="creation, name",
-	):
-		if entry.account == pivot:
+	)
+
+
+def allocation_lines(voucher) -> dict[str, tuple]:
+	rows = allocation_rows(voucher)
+	entries = defaultdict(list)
+	for entry in _gl_entries(voucher):
+		if entry.voucher_detail_no in rows:
+			entries[entry.voucher_detail_no].append(entry)
+	return {row: _allocation(voucher, row, row_entries) for row, row_entries in entries.items()}
+
+
+def _allocation(voucher, row: str, entries: list) -> tuple:
+	party = [entry for entry in entries if is_party_line(entry.account, entry.party_type)]
+	advance = [entry for entry in entries if entry not in party]
+	posting_date = max(entry.posting_date for entry in entries)
+	if not party or not advance:
+		return posting_date, []
+	contra = account_number(advance[0].account)
+	totals = defaultdict(Decimal)
+	for entry in party:
+		key = (
+			entry.account,
+			entry.party_type,
+			entry.party,
+			entry.against_voucher_type or None,
+			entry.against_voucher or None,
+		)
+		totals[key] += _decimal(entry.debit) - _decimal(entry.credit)
+	lines = [_line(voucher, key, amount, contra) for key, amount in totals.items() if amount]
+	return posting_date, sorted(lines, key=lambda line: line.line_key)
+
+
+def _totals(voucher, pivot: str) -> dict[tuple, Decimal]:
+	totals = defaultdict(Decimal)
+	party_entries = defaultdict(list)
+	excluded = allocation_rows(voucher)
+	for entry in _gl_entries(voucher):
+		if entry.account == pivot or entry.voucher_detail_no in excluded:
 			continue
 		amount = _decimal(entry.debit) - _decimal(entry.credit)
 		key = (entry.account, entry.party_type or None, entry.party or None)
@@ -99,13 +144,13 @@ def _totals(voucher, pivot: str) -> dict[tuple, Decimal]:
 		else:
 			totals[key + reference] += amount
 	for key, entries in party_entries.items():
-		allocations = _allocations(voucher, *key) or entries
+		allocations = _allocations(voucher, *key, excluded) or entries
 		for reference, amount in allocations:
 			totals[key + reference] += amount
 	return totals
 
 
-def _allocations(voucher, account: str, party_type: str, party: str) -> list:
+def _allocations(voucher, account: str, party_type: str, party: str, excluded: set[str]) -> list:
 	rows = frappe.get_all(
 		"Payment Ledger Entry",
 		filters={
@@ -116,7 +161,7 @@ def _allocations(voucher, account: str, party_type: str, party: str) -> list:
 			"party": party,
 			"delinked": 0,
 		},
-		fields=["against_voucher_type", "against_voucher_no", "amount", "account_type"],
+		fields=["against_voucher_type", "against_voucher_no", "amount", "account_type", "voucher_detail_no"],
 	)
 	return [
 		(
@@ -124,6 +169,7 @@ def _allocations(voucher, account: str, party_type: str, party: str) -> list:
 			_decimal(row.amount) * (1 if row.account_type == "Receivable" else -1),
 		)
 		for row in rows
+		if row.voucher_detail_no not in excluded
 	]
 
 

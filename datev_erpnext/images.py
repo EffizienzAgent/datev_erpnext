@@ -82,10 +82,13 @@ def _latest_supplier_file(invoice):
 		fields=["name", "file_name"],
 		order_by="creation desc, name desc",
 	)
-	return next(
-		(file for file in files if (file.file_name or "").rsplit(".", 1)[-1].lower() in SUPPLIER_FILE_TYPES),
-		None,
-	)
+	return next((file for file in files if _is_supplier_file(file.file_name or "", invoice.name)), None)
+
+
+def _is_supplier_file(file_name: str, invoice_name: str) -> bool:
+	if file_name.lower().startswith(invoice_name.lower()):
+		return False
+	return file_name.rsplit(".", 1)[-1].lower() in SUPPLIER_FILE_TYPES
 
 
 def _printed_pdf(invoice, print_format) -> bytes:

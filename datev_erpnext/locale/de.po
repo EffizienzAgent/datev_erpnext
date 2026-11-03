@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: DATEV for ERPNext\n"
 "Report-Msgid-Bugs-To: oss@effizienzagent.de\n"
-"POT-Creation-Date: 2026-11-03 08:43+0000\n"
+"POT-Creation-Date: 2026-11-03 09:12+0000\n"
 "PO-Revision-Date: 2026-11-02 13:27+0000\n"
 "Last-Translator: oss@effizienzagent.de\n"
 "Language: de\n"
@@ -37,6 +37,11 @@ msgstr "Die Buchungszeilen der Rechnung {0} weichen um {1} vom Rechnungsbetrag a
 msgid "Charges on account {0} are not supported yet"
 msgstr "Zusatzkosten auf Konto {0} werden noch nicht unterstützt"
 
+#. Label of the checked_at (Datetime) field in DocType 'DATEV Payment Check'
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:24
+msgid "Checked At"
+msgstr "Geprüft am"
+
 #: datev_erpnext/datev_erpnext/report/vouchers_without_datev/vouchers_without_datev.js:5
 #: datev_erpnext/datev_erpnext/report/vouchers_without_datev/vouchers_without_datev.py:24
 msgid "Company"
@@ -62,10 +67,16 @@ msgstr "DATEV-ERPNext-Einstellungen"
 
 #. Name of a role
 #: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:14
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:39
 msgid "DATEV Manager"
 msgstr "DATEV Manager"
 
-#: datev_erpnext/payment_sync.py:189
+#. Name of a DocType
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:30
+msgid "DATEV Payment Check"
+msgstr "DATEV-Zahlungsprüfung"
+
+#: datev_erpnext/payment_sync.py:225
 #, python-brace-format
 msgid "DATEV line {0} is in batch {1}, which is being sent. Try again once the batch is done."
 msgstr "DATEV-Zeile {0} ist im Stapel {1}, der gerade gesendet wird. Bitte erneut versuchen, sobald der Stapel abgeschlossen ist."
@@ -75,12 +86,12 @@ msgstr "DATEV-Zeile {0} ist im Stapel {1}, der gerade gesendet wird. Bitte erneu
 msgid "DATEV note: {0}"
 msgstr "DATEV-Hinweis: {0}"
 
-#: datev_erpnext/sync.py:405
+#: datev_erpnext/sync.py:427
 #, python-brace-format
 msgid "DATEV status is not available for {0}."
 msgstr "Für {0} ist kein DATEV-Status verfügbar."
 
-#: datev_erpnext/sync.py:309
+#: datev_erpnext/sync.py:330
 msgid "DATEV sync is disabled in DATEV ERPNext Settings."
 msgstr "Die DATEV-Synchronisierung ist in den DATEV-ERPNext-Einstellungen deaktiviert."
 
@@ -158,7 +169,7 @@ msgstr "Zuletzt angehängte PDF"
 msgid "Leave empty to use the default print format of Sales Invoice."
 msgstr "Leer lassen, um das Standard-Druckformat der Ausgangsrechnung zu verwenden."
 
-#: datev_erpnext/payments.py:171
+#: datev_erpnext/payments.py:217
 #, python-brace-format
 msgid "Line for purchase invoice {0} is waiting for purchase invoices to be synced."
 msgstr "Die Zeile zur Eingangsrechnung {0} wartet, bis Eingangsrechnungen synchronisiert werden."
@@ -173,7 +184,7 @@ msgstr "Die Zeile auf Konto {0} hat keine Steuervorlage. Bitte eine Artikel-Steu
 msgid "Line on account {0} has no tax template. Set an item tax template or a sales taxes template."
 msgstr "Die Zeile auf Konto {0} hat keine Steuervorlage. Hinterlegen Sie eine Artikel-Steuervorlage oder eine Vorlage für Verkaufssteuern und -abgaben."
 
-#: datev_erpnext/purchases.py:51
+#: datev_erpnext/purchases.py:52
 #, python-brace-format
 msgid "Line on account {0} uses deferred expense, which is not supported yet."
 msgstr "Die Zeile auf Konto {0} verwendet einen Rechnungsabgrenzungsposten, der noch nicht unterstützt wird."
@@ -183,7 +194,7 @@ msgstr "Die Zeile auf Konto {0} verwendet einen Rechnungsabgrenzungsposten, der 
 msgid "Line on account {0} with tax template {1} expects a rate of {2} but {3} is applied."
 msgstr "Die Zeile auf Konto {0} mit Steuervorlage {1} erwartet einen Steuersatz von {2}, angewendet ist aber {3}."
 
-#: datev_erpnext/purchases.py:46
+#: datev_erpnext/purchases.py:47
 #, python-brace-format
 msgid "Line on account {0}: goods receipts are not supported yet."
 msgstr "Zeile auf Konto {0}: Wareneingänge werden noch nicht unterstützt."
@@ -193,7 +204,7 @@ msgstr "Zeile auf Konto {0}: Wareneingänge werden noch nicht unterstützt."
 msgid "More than one enabled DATEV Client is assigned to company {0}."
 msgstr "Der Firma {0} ist mehr als ein aktiver DATEV Mandant zugeordnet."
 
-#: datev_erpnext/parties.py:45 datev_erpnext/sync.py:311
+#: datev_erpnext/parties.py:45 datev_erpnext/sync.py:332
 #, python-brace-format
 msgid "No enabled DATEV Client is assigned to company {0}."
 msgstr "Der Firma {0} ist kein aktiver DATEV Mandant zugeordnet."
@@ -269,12 +280,12 @@ msgstr "Eingangsrechnungen"
 msgid "Purchase Posting Text Template"
 msgstr "Vorlage für den Buchungstext von Eingangsrechnungen"
 
-#: datev_erpnext/purchases.py:99
+#: datev_erpnext/purchases.py:140
 #, python-brace-format
 msgid "Purchase invoice {0} has no supplier invoice number."
 msgstr "Die Eingangsrechnung {0} hat keine Rechnungsnummer des Lieferanten."
 
-#: datev_erpnext/purchases.py:38
+#: datev_erpnext/purchases.py:39
 #, python-brace-format
 msgid "Purchase invoice {0} is paid on the invoice. This is not supported yet."
 msgstr "Die Eingangsrechnung {0} ist direkt auf der Rechnung bezahlt. Das wird noch nicht unterstützt."
@@ -294,6 +305,11 @@ msgstr "Gebuchte Zahlungen und Buchungssätze mit Bank- oder Kassenkonto ab dem 
 #: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:107
 msgid "Send submitted Purchase Invoices with the supplier's document to DATEV, from the sync from date on. Also releases supplier payment lines for these invoices."
 msgstr "Gebuchte Eingangsrechnungen mit dem Beleg des Lieferanten ab dem Synchronisierungsdatum an DATEV übertragen. Gibt auch die Zahlungszeilen an Lieferanten für diese Rechnungen frei."
+
+#. Label of the source_key (Data) field in DocType 'DATEV Payment Check'
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:16
+msgid "Source Key"
+msgstr "Quellschlüssel"
 
 #. Label of the supplier_number_field (Data) field in DocType 'DATEV ERPNext
 #. Settings'
@@ -319,6 +335,7 @@ msgstr "Synchronisieren ab"
 
 #. Name of a role
 #: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:19
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:35
 msgid "System Manager"
 msgstr "Systemmanager"
 
@@ -332,12 +349,12 @@ msgstr "Das Steuerkennzeichen {0} hat keine Zeile in den Steuerschlüsseln des D
 msgid "Tax code {0} is a reverse charge template and needs a BU key in the tax keys of DATEV Client {1}."
 msgstr "Steuercode {0} ist eine Reverse-Charge-Vorlage und benötigt einen BU-Schlüssel in den Steuerschlüsseln des DATEV Mandanten {1}."
 
-#: datev_erpnext/purchases.py:85
+#: datev_erpnext/purchases.py:89
 #, python-brace-format
 msgid "Tax row on account {0} deducts tax without a matching input tax row. Only reverse charge pairs are supported."
 msgstr "Die Steuerzeile auf Konto {0} zieht Steuer ab, ohne passende Vorsteuerzeile. Unterstützt werden nur Reverse-Charge-Paare."
 
-#: datev_erpnext/purchases.py:64
+#: datev_erpnext/purchases.py:65
 #, python-brace-format
 msgid "Tax row on account {0} has category {1}, which is not supported yet."
 msgstr "Die Steuerzeile auf Konto {0} hat die Kategorie {1}, die noch nicht unterstützt wird."
@@ -347,7 +364,7 @@ msgstr "Die Steuerzeile auf Konto {0} hat die Kategorie {1}, die noch nicht unte
 msgid "Tax row on account {0} uses charge type {1}, which is not supported yet."
 msgstr "Die Steuerzeile auf Konto {0} verwendet die Berechnungsart {1}, die noch nicht unterstützt wird."
 
-#: datev_erpnext/sync.py:302
+#: datev_erpnext/sync.py:323
 #, python-brace-format
 msgid "The posting text template {0} is invalid"
 msgstr "Die Vorlage für den Buchungstext {0} ist ungültig"
@@ -366,12 +383,17 @@ msgstr "Belegart"
 msgid "Vouchers without DATEV"
 msgstr "Belege ohne DATEV"
 
-#: datev_erpnext/payments.py:190
+#: datev_erpnext/payments.py:236
 #, python-brace-format
 msgid "Waiting for {0} {1} to be transferred to DATEV."
 msgstr "Wartet, bis {0} {1} an DATEV übertragen ist."
 
-#: datev_erpnext/payment_sync.py:60 datev_erpnext/sync.py:219
+#. Description of a DocType
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:4
+msgid "When the adapter last compared a payment's ledger with its DATEV lines."
+msgstr "Wann der Adapter die Buchungen einer Zahlung zuletzt mit ihren DATEV-Zeilen verglichen hat."
+
+#: datev_erpnext/payment_sync.py:64 datev_erpnext/sync.py:219
 msgid "no booking lines, not transferred."
 msgstr "keine Buchungszeilen, nicht übertragen."
 

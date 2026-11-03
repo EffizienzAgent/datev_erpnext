@@ -3,14 +3,15 @@ import re
 import frappe
 from datev.intake import add_booking, discard_document, discard_open_bookings, upsert_document
 from frappe import _
-from frappe.utils import flt, getdate
+from frappe.utils import flt, getdate, now_datetime
 
 from datev_erpnext import sync
 from datev_erpnext.clients import client_for
 from datev_erpnext.parties import party_account_for
-from datev_erpnext.payments import Waiting, voucher_lines
+from datev_erpnext.payments import Waiting, allocation_lines, voucher_lines
 
 DOCUMENT = "DATEV Document"
+CHECK = "DATEV Payment Check"
 BOOKING = "DATEV Booking"
 DELIVERED = ("Transferred", "Exported")
 REVERSAL = "storno:"
@@ -34,7 +35,10 @@ def sync_payment(doctype: str, name: str, from_backfill: bool = False) -> str | 
 		locked = frappe.get_doc(doctype, name, for_update=True)
 		if not _should_sync(locked, from_backfill):
 			return None
-		return _sync(client, locked)
+		checked_at = now_datetime()
+		document = _sync(client, locked)
+		mark_checked(doctype, name, checked_at)
+		return document
 	except Waiting as waiting:
 		sync._note(voucher, sync.WAITING, str(waiting))
 		return None
@@ -72,8 +76,40 @@ def _sync(client, voucher) -> str | None:
 			source_doctype=voucher.doctype,
 			source_name=voucher.name,
 		)
+	allocations = allocation_lines(voucher)
 	apply_lines(document, key, [_values(client, line) for line in lines])
+	for row, (posting_date, row_lines) in allocations.items():
+		_sync_allocation(client, voucher, row, posting_date, row_lines)
+	for row_key in _allocation_keys(voucher):
+		if row_key.rsplit(":", 1)[-1] not in allocations:
+			apply_lines(frappe.db.get_value(DOCUMENT, {"source_key": row_key}, "name"), row_key, [])
 	return document
+
+
+def _allocation_keys(voucher) -> list[str]:
+	prefix = sync.source_key(voucher.name, voucher.doctype) + ":"
+	return frappe.get_all(DOCUMENT, filters={"source_key": ("like", f"{prefix}%")}, pluck="source_key")
+
+
+def _sync_allocation(client, voucher, row: str, posting_date, lines: list) -> None:
+	key = f"{sync.source_key(voucher.name, voucher.doctype)}:{row}"
+	document = frappe.db.get_value(DOCUMENT, {"source_key": key}, "name")
+	if not document and not lines:
+		return
+	if not document:
+		document = upsert_document(
+			client.name,
+			key,
+			direction="Other",
+			content=None,
+			document_date=posting_date,
+			document_number=voucher.name,
+			amount=sum(line.amount for line in lines),
+			currency=frappe.get_cached_value("Company", voucher.company, "default_currency"),
+			source_doctype=voucher.doctype,
+			source_name=voucher.name,
+		)
+	apply_lines(document, key, [_values(client, line) for line in lines])
 
 
 def _amount(voucher) -> float:
@@ -192,7 +228,7 @@ def _check_not_sending(bookings: list) -> None:
 
 
 def _add(document: str, values) -> None:
-	booking = add_booking(
+	add_booking(
 		document,
 		values.line_key,
 		kind="Payment",
@@ -204,13 +240,17 @@ def _add(document: str, values) -> None:
 		posting_text=values.posting_text,
 		depends_on_document=values.depends_on_document,
 		general_reversal=values.general_reversal,
+		document_field_1=values.document_field_1,
 	)
-	if frappe.db.get_value(BOOKING, booking, "document_field_1") != values.document_field_1:
-		frappe.db.set_value(BOOKING, booking, "document_field_1", values.document_field_1)
 
 
 def before_cancel(doc, method=None):
-	key = sync.source_key(doc.name, doc.doctype)
+	for key in _allocation_keys(doc):
+		_cancel(key)
+	_cancel(sync.source_key(doc.name, doc.doctype))
+
+
+def _cancel(key: str):
 	document = frappe.db.get_value(DOCUMENT, {"source_key": key}, "name", for_update=True)
 	if not document:
 		return
@@ -239,42 +279,43 @@ def _queue_recompute(doctype: str, name: str):
 		frappe.log_error(f"DATEV recompute could not be queued for {doctype} {name}")
 
 
-def changed_payments(companies: list[str], limit: int | None = None) -> list[tuple[str, str]]:
+def mark_checked(doctype: str, name: str, checked_at) -> None:
+	key = sync.source_key(name, doctype)
+	if frappe.db.exists(CHECK, key):
+		frappe.db.set_value(CHECK, key, "checked_at", checked_at, update_modified=False)
+	else:
+		frappe.get_doc({"doctype": CHECK, "source_key": key, "checked_at": checked_at}).insert(
+			ignore_permissions=True
+		)
+
+
+def changed_payments(companies: list[str], doctype: str, limit: int | None = None) -> list[str]:
 	if not companies:
 		return []
-	changed = []
-	for doctype in sync.PAYMENT_DOCTYPES:
-		changed.extend(
-			(doctype, name)
-			for name in frappe.db.sql_list(
-				f"""
-				select voucher.name
-				from `tab{doctype}` voucher
-				join `tabDATEV Document` document
-					on document.source_key = concat(%(doctype)s, ':', voucher.name)
-				where voucher.company in %(companies)s
-					and voucher.docstatus = 1
-					and exists (
-						select 1 from `tabPayment Ledger Entry` ledger
-						where ledger.voucher_type = %(doctype)s and ledger.voucher_no = voucher.name
-							and ledger.modified > ifnull(
-								(select max(booking.modified) from `tabDATEV Booking` booking
-								where booking.document = document.name),
-								document.creation
-							)
-						union all
-						select 1 from `tabGL Entry` entry
-						where entry.voucher_type = %(doctype)s and entry.voucher_no = voucher.name
-							and entry.modified > ifnull(
-								(select max(booking.modified) from `tabDATEV Booking` booking
-								where booking.document = document.name),
-								document.creation
-							)
-					)
-				order by voucher.posting_date, voucher.name
-				{"limit %(limit)s" if limit else ""}
-				""",
-				{"doctype": doctype, "companies": tuple(companies), "limit": limit},
-			)
-		)
-	return changed[:limit] if limit else changed
+	return frappe.db.sql_list(
+		f"""
+		select name from (
+			select voucher.name,
+				greatest(
+					ifnull((select max(ledger.modified) from `tabPayment Ledger Entry` ledger
+						where ledger.voucher_type = %(doctype)s and ledger.voucher_no = voucher.name), '1970-01-01'),
+					ifnull((select max(entry.modified) from `tabGL Entry` entry
+						where entry.voucher_type = %(doctype)s and entry.voucher_no = voucher.name), '1970-01-01')
+				) as changed_at,
+				ifnull(
+					(select checked.checked_at from `tabDATEV Payment Check` checked
+					where checked.name = document.source_key),
+					document.creation
+				) as checked_at
+			from `tab{doctype}` voucher
+			join `tabDATEV Document` document
+				on document.source_key = concat(%(doctype)s, ':', voucher.name)
+			where voucher.company in %(companies)s
+				and voucher.docstatus = 1
+		) candidates
+		where changed_at > checked_at
+		order by changed_at desc
+		{"limit %(limit)s" if limit else ""}
+		""",
+		{"doctype": doctype, "companies": tuple(companies), "limit": limit},
+	)

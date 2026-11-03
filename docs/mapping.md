@@ -54,7 +54,7 @@ One DATEV Document per Purchase Invoice, source key `Purchase Invoice:<name>`, d
 
 ### Reverse charge
 
-Reverse charge (§ 13b UStG) and intra-EU acquisitions are expected as a template with an input tax row (`Add`) and an output tax row (`Deduct`) on Tax accounts at the same rate. Such a pair is recognised as reverse charge: the line goes out with its **net** amount and rate 0, and the tax code's row in the client's tax keys must carry a BU key (DATEV computes both taxes from it). An empty BU key is rejected.
+Reverse charge (§ 13b UStG) and intra-EU acquisitions are expected as a template with an input tax row (`Add`) and an output tax row (`Deduct`) on Tax accounts at the same rate. The pair must come from the invoice's Purchase Taxes and Charges Template, and the `Add` account must not be a regular input tax account (one used in a template of the company without any `Deduct` row); use dedicated accounts for reverse charge input tax. Such a pair is recognised as reverse charge: the line goes out with its **net** amount and rate 0, and the tax code's row in the client's tax keys must carry a BU key (DATEV computes both taxes from it). An empty BU key is rejected.
 
 ### Rejected purchase invoices
 
@@ -83,7 +83,15 @@ One DATEV Document without file per voucher, source key `Payment Entry:<name>` o
 - **Posting text:** the party name, else the account name.
 - **Line key:** `<account number>:<party>:<referenced voucher>`. A changed line gets a new key with `#2`, `#3`, …; reversals use `storno:<key>`.
 
-Bank fees, interest and other deductions are booked to the account chosen in ERPNext, with or without a party. With separate advance accounts, ERPNext moves an allocated advance from the advance account to the receivable or payable account inside the payment; both GL entries become lines against the bank account, which cancel each other on the bank side.
+Bank fees, interest and other deductions are booked to the account chosen in ERPNext, with or without a party.
+
+### Advances on separate advance accounts
+
+With **Book Advance Payments in Separate Party Account**, the receipt or payment itself books the advance account against the bank. When ERPNext later allocates the advance to an invoice, it moves the amount from the advance account to the receivable or payable account inside the payment, dated by the company's "Reconciliation Takes Effect On". These allocation entries do not touch the bank: each reference row of the payment becomes its own DATEV Document (source key `Payment Entry:<name>:<reference row>`, without file), dated at the allocation's posting date, with one line debtor/creditor against the advance account number and the invoice number in Belegfeld 1. Unreconciling reverses that document; cancelling the payment cancels it too.
+
+### Re-allocation and dates
+
+All lines of a payment, including reversals and new lines after a re-allocation, carry the payment's posting date (except allocations on separate advance accounts, see above). A re-allocation months later therefore books into the payment's month. If that month is locked in DATEV (Festschreibung) or its fiscal year is closed, the export of these lines fails and the bookings show up as Stuck or Failed in the DATEV status report; nothing is moved silently into another period. Decide with your tax advisor how to post such corrections.
 
 ## Not supported yet
 

@@ -227,7 +227,10 @@ def _sync_invoice(doctype: str, name: str, from_backfill: bool) -> str | None:
 		if image is None:
 			_note(invoice, NOT_TRANSFERRED, _("no supplier document attached, not transferred."))
 			return None
-		return _sync(client, locked, image)
+		document = _sync(client, locked, image)
+		if document:
+			_queue_payments(locked)
+		return document
 	except Exception as error:
 		frappe.db.rollback()
 		frappe.log_error(f"DATEV sync failed for {doctype} {name}")
@@ -277,6 +280,24 @@ def _sync(client, invoice, image: tuple[str, bytes]) -> str | None:
 			due_date=invoice.due_date,
 		)
 	return document
+
+
+def _queue_payments(invoice):
+	if not frappe.get_single(SETTINGS).sync_payments:
+		return
+	payments = frappe.get_all(
+		"Payment Ledger Entry",
+		filters={
+			"against_voucher_type": invoice.doctype,
+			"against_voucher_no": invoice.name,
+			"voucher_type": ("in", PAYMENT_DOCTYPES),
+			"delinked": 0,
+		},
+		fields=["voucher_type", "voucher_no"],
+		distinct=True,
+	)
+	for payment in payments:
+		enqueue_sync(payment.voucher_type, payment.voucher_no, queue="short", enqueue_after_commit=True)
 
 
 def _posting_text(invoice) -> str:
@@ -329,8 +350,9 @@ def catch_up():
 	if settings.sync_payments:
 		from datev_erpnext.payment_sync import changed_payments
 
-		for doctype, name in changed_payments(companies, limit=CATCH_UP_LIMIT):
-			enqueue_sync(doctype, name, queue="long")
+		for doctype in PAYMENT_DOCTYPES:
+			for name in changed_payments(companies, doctype, limit=CATCH_UP_LIMIT):
+				enqueue_sync(doctype, name, queue="long")
 
 
 def missing_invoices(

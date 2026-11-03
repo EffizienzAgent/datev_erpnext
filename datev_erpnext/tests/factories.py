@@ -18,6 +18,7 @@ ACCOUNTS = (
 	("Forderungen aus Lieferungen und Leistungen", "1200", "Receivable", "Accounts Receivable", 0),
 	("Verbindlichkeiten aus Lieferungen und Leistungen", "3300", "Payable", "Accounts Payable", 0),
 	("Geleistete Anzahlungen", "1186", "Payable", "Loans and Advances (Assets)", 0),
+	("Erhaltene Anzahlungen", "3250", "Receivable", "Current Liabilities", 0),
 	("Bank", "1800", "Bank", "Bank Accounts", 0),
 	("Sparkasse", "1810", "Bank", "Bank Accounts", 0),
 	("Nebenkosten des Geldverkehrs", "6855", "Expense Account", "Indirect Expenses", 0),

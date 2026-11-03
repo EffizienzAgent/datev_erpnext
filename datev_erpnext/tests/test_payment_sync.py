@@ -4,7 +4,7 @@ from unittest.mock import patch
 import frappe
 from datev.protect import internal
 from frappe.tests import IntegrationTestCase
-from frappe.utils import nowdate
+from frappe.utils import add_days, nowdate
 
 from datev_erpnext import payment_sync, sync
 from datev_erpnext.tests.factories import (
@@ -166,6 +166,17 @@ class TestPaymentSync(IntegrationTestCase):
 		self.assertIn(invoice.name, comment)
 		self.assertEqual(sync.datev_status(payment.name, "Payment Entry")["notice"], "waiting")
 
+	def test_invoice_sync_queues_waiting_payments(self):
+		invoice = make_invoice(self.company, [("MIETE", 1, 100)])
+		invoice.submit()
+		payment = make_payment(self.company, [(invoice.name, 119)])
+		payment.submit()
+		self.assertIsNone(payment_sync.sync_payment("Payment Entry", payment.name))
+		self.enqueue.reset_mock()
+		sync.sync_sales_invoice(invoice.name)
+		self.assertEqual([job["name"] for job in self._jobs()], [payment.name])
+		self.assertTrue(payment_sync.sync_payment("Payment Entry", payment.name))
+
 	def test_cancel_before_transfer_discards(self):
 		payment, document = self._synced_payment()
 		payment.cancel()
@@ -310,6 +321,76 @@ class TestPaymentSync(IntegrationTestCase):
 			[(f"1200:{customer()}:{first.name}", first.name)],
 		)
 
+	def test_advance_allocation_on_separate_account(self):
+		advance = account(self.company, "3250")
+		company = frappe.get_doc("Company", self.company)
+		for field, value in (
+			("reconciliation_takes_effect_on", "Oldest Of Invoice Or Advance"),
+			("default_advance_received_account", advance),
+			("book_advance_payments_in_separate_party_account", 1),
+		):
+			self.addCleanup(company.db_set, field, company.get(field))
+			company.db_set(field, value)
+		yesterday = add_days(nowdate(), -1)
+		payment = make_payment(
+			self.company,
+			[],
+			amount=119,
+			paid_from=advance,
+			posting_date=yesterday,
+			book_advance_payments_in_separate_party_account=1,
+		)
+		payment.submit()
+		document = payment_sync.sync_payment("Payment Entry", payment.name)
+		[bank_line] = bookings(document)
+		self.assertEqual(
+			(bank_line.account, bank_line.party_account, bank_line.contra_account, bank_line.debit_credit),
+			(3250, None, 1800, "H"),
+		)
+		invoice, invoice_document = self._invoice()
+
+		reconciliation = frappe.new_doc("Payment Reconciliation")
+		reconciliation.update(
+			{
+				"company": self.company,
+				"party_type": "Customer",
+				"party": customer(),
+				"receivable_payable_account": account(self.company, "1200"),
+				"default_advance_account": advance,
+			}
+		)
+		reconciliation.get_unreconciled_entries()
+		invoices = [row.as_dict() for row in reconciliation.invoices if row.invoice_number == invoice.name]
+		payments = [row.as_dict() for row in reconciliation.payments if row.reference_name == payment.name]
+		reconciliation.allocate_entries(frappe._dict({"invoices": invoices, "payments": payments}))
+		reconciliation.reconcile()
+
+		payment_sync.sync_payment("Payment Entry", payment.name)
+
+		self.assertEqual([row.line_key for row in bookings(document)], [bank_line.line_key])
+		row = frappe.get_doc("Payment Entry", payment.name).references[0]
+		allocation = frappe.get_doc(
+			"DATEV Document", {"source_key": f"Payment Entry:{payment.name}:{row.name}"}
+		)
+		self.assertEqual((allocation.status, str(allocation.document_date)), ("Not Required", nowdate()))
+		party = frappe.db.get_value("DATEV Party Account", {"party": customer(), "kind": "Debtor"}, "name")
+		[line] = bookings(allocation.name)
+		self.assertEqual(
+			(
+				line.party_account,
+				line.contra_account,
+				line.debit_credit,
+				Decimal(str(line.amount)),
+				line.document_field_1,
+				line.depends_on_document,
+			),
+			(party, 3250, "H", Decimal("119"), invoice.name, invoice_document),
+		)
+
+		payment.reload()
+		payment.cancel()
+		self.assertEqual(frappe.db.get_value("DATEV Document", allocation.name, "status"), "Discarded")
+
 	def test_unreconcile_queues_recompute(self):
 		invoice, _invoice_document = self._invoice()
 		payment, _document = self._synced_payment([(invoice.name, 119)])
@@ -327,32 +408,48 @@ class TestPaymentSync(IntegrationTestCase):
 		unreconcile.submit()
 		self.assertIn(payment.name, [job["name"] for job in self._jobs()])
 
+	def _set_checked(self, payment, value):
+		frappe.db.set_value(
+			"DATEV Payment Check", f"Payment Entry:{payment.name}", "checked_at", value, update_modified=False
+		)
+
+	def _touch_ledger(self, payment, value="2999-01-01 00:00:00"):
+		frappe.db.set_value(
+			"Payment Ledger Entry",
+			{"voucher_no": payment.name},
+			"modified",
+			value,
+			update_modified=False,
+		)
+
 	def test_catch_up_includes_payments(self):
 		missing = make_payment(self.company, [], amount=50)
 		missing.submit()
-		synced, document = self._synced_payment([], amount=70)
+		synced, _document = self._synced_payment([], amount=70)
+		self.assertTrue(frappe.db.exists("DATEV Payment Check", f"Payment Entry:{synced.name}"))
 		self.enqueue.reset_mock()
-		frappe.db.set_value(
-			"DATEV Booking", {"document": document}, "modified", "2000-01-01 00:00:00", update_modified=False
-		)
-		frappe.db.set_value(
-			"DATEV Document", document, "creation", "2000-01-01 00:00:00", update_modified=False
-		)
 
 		sync.catch_up()
-
 		queued = {(job["doctype"], job["name"]): job for job in self._jobs()}
 		self.assertEqual(queued[("Payment Entry", missing.name)]["queue"], "long")
-		self.assertIn(("Payment Entry", synced.name), queued)
+		self.assertNotIn(("Payment Entry", synced.name), queued)
 
 		self.enqueue.reset_mock()
-		frappe.db.set_value(
-			"DATEV Booking", {"document": document}, "modified", "2999-01-01 00:00:00", update_modified=False
-		)
+		self._touch_ledger(synced)
 		sync.catch_up()
-		self.assertNotIn(
-			("Payment Entry", synced.name), {(job["doctype"], job["name"]) for job in self._jobs()}
-		)
+		self.assertIn(("Payment Entry", synced.name), {(job["doctype"], job["name"]) for job in self._jobs()})
+
+	def test_unchanged_payments_do_not_starve_reallocation(self):
+		unchanged = [self._synced_payment([], amount=10 + index)[0] for index in range(3)]
+		changed, _document = self._synced_payment([], amount=99)
+		for payment in unchanged:
+			self._touch_ledger(payment, "2998-01-01 00:00:00")
+			self._set_checked(payment, "2998-06-01 00:00:00")
+		self._touch_ledger(changed)
+		self.enqueue.reset_mock()
+		with patch.object(sync, "CATCH_UP_LIMIT", 1):
+			sync.catch_up()
+		self.assertEqual([job["name"] for job in self._jobs()], [changed.name])
 
 	def test_payment_report_lists_missing(self):
 		from frappe.desk.query_report import run

@@ -78,6 +78,26 @@ class TestPurchases(IntegrationTestCase):
 			purchase_invoice_lines(invoice)
 		self.assertIn("reverse charge pairs", str(raised.exception))
 
+	def test_input_tax_with_stray_deduct_row_rejected(self):
+		invoice = make_purchase_invoice(self.company, [("BUERO", 1, 100)])
+		invoice.append(
+			"taxes",
+			{
+				"category": "Total",
+				"add_deduct_tax": "Deduct",
+				"charge_type": "On Net Total",
+				"account_head": frappe.db.get_value(
+					"Account", {"company": self.company, "account_number": "3837"}
+				),
+				"description": "Umsatzsteuer",
+				"rate": 19,
+			},
+		)
+		invoice.calculate_taxes_and_totals()
+		with self.assertRaises(frappe.ValidationError) as raised:
+			purchase_invoice_lines(invoice)
+		self.assertIn("reverse charge pairs", str(raised.exception))
+
 	def test_valuation_category_rejected(self):
 		invoice = make_purchase_invoice(self.company, [("BUERO", 1, 100)])
 		invoice.taxes[0].category = "Valuation and Total"
