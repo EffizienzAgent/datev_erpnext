@@ -25,13 +25,19 @@ Open **DATEV ERPNext Settings**. Defaults are stored on install and migrate if n
 | Enabled | Sync on submit, catch-up and backfill. Off: nothing is queued, and jobs that are already queued do nothing. |
 | Sync from date | Invoices with a posting date on or after this date are synced on submit and by the catch-up. Empty: no automatic sync. The backfill ignores it. |
 | Customer Number Field | Fieldname on Customer used as preferred debtor number. Empty: the DATEV app assigns numbers. |
+| Supplier Number Field | Fieldname on Supplier used as preferred creditor number. Empty: the DATEV app assigns numbers. |
 | Document Image Source | `Print format` renders the invoice; `Latest attached PDF` uses the newest PDF attached to the invoice and falls back to the print format. |
 | Print Format | Used when rendering, limited to print formats of Sales Invoice. Empty: default print format of Sales Invoice. |
 | Posting Text Template | Placeholders `{customer_name}`, `{name}`, `{po_no}`. The DATEV app cuts the result to 60 characters. |
+| Sync Payments | Off by default. Sends Payment Entries and Journal Entries with a Bank or Cash account, see [payments](#payments). |
+| Sync Purchase Invoices | Off by default. Sends Purchase Invoices with the supplier's document, see [purchase invoices](#purchase-invoices). Also releases supplier payment lines. |
+| Purchase Posting Text Template | Placeholders `{supplier_name}`, `{bill_no}`, `{bill_date}`, `{name}`. Empty: `{supplier_name}`. |
 
 ### Customer numbers
 
 If your customers carry a legacy customer number (Kundennummer), add a custom field on Customer that holds it (for example `customer_number`) and enter its fieldname in the settings. The value becomes the preferred debtor number. Customers without a numeric value get a number according to the client's numbering rule. Do not change the field after the first sync.
+
+Supplier numbers (Kreditorennummer) work the same way with **Supplier Number Field** on Supplier.
 
 ## Document image
 
@@ -73,6 +79,29 @@ Return `None` to fall back to the configured source.
 
 With `Latest attached PDF`, the sync takes whatever PDF is attached when the job runs. A PDF attached before submit (for example an imported original) wins over the rendered print format; attach the final invoice PDF before submitting.
 
+## Purchase invoices
+
+With **Sync Purchase Invoices** on, a submitted Purchase Invoice (not opening) with a posting date on or after **Sync from date** is sent with the supplier's original file. The file is taken from, in this order:
+
+1. the hook `datev_erpnext_document_image` (it receives Purchase Invoices too; check `invoice.doctype`),
+2. with `eu_einvoice` installed: the file of the **E Invoice Import** linked to the invoice (XML or ZUGFeRD PDF),
+3. the newest PDF or XML file attached to the invoice,
+4. for a debit note (return): the invoice's default print format as PDF.
+
+Without a file, the invoice is not sent and gets the comment `DATEV note: no supplier document attached, not transferred.` Attach the file and the daily catch-up sends it. A print format is never rendered for a supplier invoice.
+
+Belegfeld 1 is the supplier invoice number (`bill_no`), which is required. Add one row per purchase tax code to the client's tax keys; a reverse charge template needs a BU key (see [mapping](mapping.md#reverse-charge)). Cancelling works like for sales invoices: blocked once the document is uploaded, correct with a debit note instead.
+
+## Payments
+
+With **Sync Payments** on, a submitted Payment Entry and a submitted Journal Entry that touches a Bank or Cash account (not opening) with a posting date on or after **Sync from date** become bookings without a document file (status Not Required in the core). Journal Entries without a bank or cash account are ignored. How each voucher becomes lines is described in [mapping](mapping.md#payments).
+
+- A line that clears an invoice carries the invoice number in Belegfeld 1 and waits in the core until that invoice is in DATEV. Invoices before **Sync from date** are assumed to be in DATEV already; their payments go out right away.
+- If the referenced invoice has no DATEV Document yet (its job has not run or it failed), the payment is not sent and gets the note `DATEV note: Waiting for ...`; the orange indicator shows `DATEV: waiting`. The daily catch-up retries.
+- Lines for Purchase Invoices on or after **Sync from date** wait until **Sync Purchase Invoices** is on (note `waiting for purchase invoices to be synced`).
+- **Cancel:** before transfer, the payment's document and open bookings are discarded. After transfer, the cancel adds reversal lines (general reversal, posting text prefixed "Storno"). While a booking of the payment is in an approved or sending batch, cancelling is blocked; try again after the batch is done.
+- **Re-allocation:** Payment Reconciliation, Unreconcile Payment and advance allocation change a submitted payment's allocation. The adapter recomputes the lines after these changes and in the daily catch-up: lines already in DATEV that changed get a reversal and a new line, unchanged lines stay, open lines are updated in place.
+
 ## Going live
 
 1. Install, set `host_name`, create and test the DATEV Client with a test mandate, fill the settings. Add one row per tax code (Sales Taxes and Charges Template or Item Tax Template name) to the client's tax keys; leave the BU key empty for automatic accounts.
@@ -84,7 +113,8 @@ With `Latest attached PDF`, the sync takes whatever PDF is attached when the job
    ```
 4. Run the core's initial matching on the client (**Match DATEV accounts** or **Match from file**), so existing DATEV accounts are linked instead of duplicated. Decide the parties that end up "To Clarify".
 5. If needed, run the backfill for invoices before the sync from date. Run `register_customers` first, so the backfill jobs do not create party accounts concurrently.
-6. Check stuck items: the DATEV status report and the report **Sales Invoices without DATEV**.
+6. Check stuck items: the DATEV status report and the report **Vouchers without DATEV**.
+7. Turn on the other sources one after the other, in this order: sales invoices first, then **Sync Payments** once the sales invoices reach DATEV, then **Sync Purchase Invoices** (which also releases the held supplier payments). Payments clear open items in DATEV only if the invoices they clear are there with the same Belegfeld 1.
 
 ### Backfill
 
@@ -106,9 +136,9 @@ Submitting a Sales Invoice on or after the sync from date queues one job per inv
 
 ### Catch-up and report
 
-A daily job queues every submitted, non-opening invoice of a Company with an enabled DATEV Client that has a posting date on or after **Sync from date** and no DATEV Document, at most 500 per run. Invoices without a DATEV comment since their last change come first, then by posting date, so invoices that keep failing do not block the others. It catches invoices whose job was lost or failed for a temporary reason. An invoice that keeps failing is retried every day; its failure comment is not repeated.
+A daily job queues every submitted, non-opening voucher (sales invoices, and purchase invoices and payments if switched on) of a Company with an enabled DATEV Client that has a posting date on or after **Sync from date** and no DATEV Document, at most 500 per source and run. It also re-checks payments whose ledger entries changed after their last DATEV booking (re-allocations). Invoices without a DATEV comment since their last change come first, then by posting date, so invoices that keep failing do not block the others. It catches invoices whose job was lost or failed for a temporary reason. An invoice that keeps failing is retried every day; its failure comment is not repeated.
 
-The script report **Sales Invoices without DATEV** (DATEV User, DATEV Manager, Accounts Manager) lists the same invoices for all Companies with a DATEV Client, with the latest error or note written by the sync as the reason. Filter by Company. Check it regularly; an empty report means every invoice since the go-live is in DATEV.
+The script report **Vouchers without DATEV** (DATEV User, DATEV Manager, Accounts Manager) lists the same vouchers for all Companies with a DATEV Client, with the latest error or note written by the sync as the reason. Filter by Company and voucher type. Check it regularly; an empty report means every voucher since the go-live is in DATEV. It replaces the report **Sales Invoices without DATEV** of earlier versions, which is removed on migrate.
 
 ## Cancelling
 

@@ -1,14 +1,16 @@
-ERPNext adapter for the datev app: Sales Invoices to DATEV with Beleglink
+ERPNext adapter for the datev app: sales invoices, purchase invoices and payments to DATEV
 
 # DATEV for ERPNext
 
-`datev_erpnext` sends submitted ERPNext Sales Invoices (including returns) to the [`datev`](https://github.com/EffizienzAgent/datev) app: the invoice PDF as a document with Beleglink, one booking per revenue account and tax code, and the customer as debtor account. The core app controls dispatch, approval and export; this app only feeds it, through the core's Python intake API.
+`datev_erpnext` sends submitted ERPNext Sales Invoices (including returns), Purchase Invoices and bank and cash bookings (Payment Entries, Journal Entries) to the [`datev`](https://github.com/EffizienzAgent/datev) app: invoices as documents with Beleglink and one booking per account and tax code, customers as debtors, suppliers as creditors, payments as bookings against the bank account with the invoice number in Belegfeld 1. The core app controls dispatch, approval and export; this app only feeds it, through the core's Python intake API.
 
 > **Work in progress.** This app has not been verified against a real DATEV Rechnungswesen, DATEVconnect or Business OS yet, and neither has the core app it depends on. APIs and doctypes may change before 1.0. Use at your own risk and start with a test client. New here? Read the [setup guide](docs/setup.md).
 
 ## Status
 
-Covered: Sales Invoices and their returns (Stornorechnungen), sent on submit from a configurable start date, plus a backfill for existing invoices and a daily catch-up for invoices that did not make it. Opening invoices are not sent. Not covered yet: purchase invoices, payments, write-offs, charges outside tax accounts. See [mapping](docs/mapping.md).
+Covered: Sales Invoices and their returns (Stornorechnungen), sent on submit from a configurable start date, plus a backfill for existing sales invoices and a daily catch-up for everything that did not make it. Optional (off by default): Purchase Invoices with the supplier's document, and Payment Entries and Journal Entries on bank or cash accounts. Opening entries are not sent. Not covered yet: goods receipts, purchase invoices paid on the invoice, write-offs, deferred expense, charges outside tax accounts. See [mapping](docs/mapping.md).
+
+Requires `datev` 0.3.0 or later.
 
 ## No compliance promise
 
@@ -21,16 +23,18 @@ datev_erpnext is a technical tool. It does not make you compliant with DATEV req
 - Stornorechnungen (ERPNext returns) with the opposite debit/credit side.
 - Document image from a print format or the latest attached PDF; with `eu_einvoice` installed, the ZUGFeRD XML is embedded (only with the "Print format" source and a ZUGFeRD profile). A hook (`datev_erpnext_document_image`) replaces the image source.
 - [Customers as debtors](docs/setup.md#customer-numbers) with a preferred number from a field of your choice; `register_customers` to prepare the initial matching.
-- [Backfill](docs/setup.md#backfill) of invoices submitted before go-live.
-- [Daily catch-up](docs/setup.md#catch-up-and-report) that re-queues submitted invoices without a DATEV Document, and the report **Sales Invoices without DATEV** with the reason for each.
-- Status indicator on the Sales Invoice form. Every failed sync rolls back completely, logs an error and leaves a comment `DATEV: <reason>` on the invoice; the indicator turns red. Invoices that are deliberately not sent get a `DATEV note: <reason>` instead.
+- [Purchase invoices](docs/mapping.md#purchase-invoices) with the supplier's original file (e-invoice import, newest attached PDF or XML), the supplier invoice number in Belegfeld 1, reverse charge through the client's BU keys, suppliers as creditors.
+- [Payments](docs/mapping.md#payments): one booking per GL entry of the voucher against its bank account, invoice number in Belegfeld 1, waiting until the invoice is in DATEV; re-allocations and cancellations after transfer are sent as general reversals plus new lines.
+- [Backfill](docs/setup.md#backfill) of sales invoices submitted before go-live.
+- [Daily catch-up](docs/setup.md#catch-up-and-report) that re-queues submitted vouchers without a DATEV Document and re-checks re-allocated payments, and the report **Vouchers without DATEV** with the reason for each.
+- Status indicator on the Sales Invoice, Purchase Invoice, Payment Entry and Journal Entry forms. Every failed sync rolls back completely, logs an error and leaves a comment `DATEV: <reason>` on the invoice; the indicator turns red. Invoices that are deliberately not sent get a `DATEV note: <reason>` instead.
 - Invoices that are already in DATEV cannot be cancelled; create a Stornorechnung instead.
 - German translations for the whole UI.
 
 ## Documentation
 
 - [Setup](docs/setup.md): install, settings, clients, go-live, cancel rules
-- [Mapping](docs/mapping.md): how an invoice becomes booking lines, rejected cases, limits
+- [Mapping](docs/mapping.md): how invoices and payments become booking lines, rejected cases, limits
 
 ## Installation
 
