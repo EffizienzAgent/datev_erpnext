@@ -7,7 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import getdate
 
-from datev_erpnext.lines import CENT, _account_number
+from datev_erpnext.lines import CENT, account_number
 
 BANK_TYPES = ("Bank", "Cash")
 PARTY_ACCOUNTS = {("Receivable", "Asset"): "Customer", ("Payable", "Liability"): "Supplier"}
@@ -64,7 +64,7 @@ def voucher_lines(doctype: str, name: str) -> list[PaymentLine]:
 	pivot = pivot_account(voucher)
 	if not pivot:
 		return []
-	contra = _account_number(pivot)
+	contra = account_number(pivot)
 	totals = _totals(voucher, pivot)
 	lines = [_line(voucher, key, amount, contra) for key, amount in totals.items() if amount]
 	return sorted(lines, key=lambda line: line.line_key)
@@ -138,7 +138,7 @@ def _line(voucher, key: tuple, amount: Decimal, contra: int) -> PaymentLine:
 		line_key=_line_key(f"{number}:{party or ''}:{against or voucher.name}"),
 		party_type=party_type if party_line else None,
 		party=party if party_line else None,
-		account_number=None if party_line else _account_number(account),
+		account_number=None if party_line else account_number(account),
 		contra_account_number=contra,
 		amount=abs(amount.quantize(CENT)),
 		debit_credit="S" if amount > 0 else "H",

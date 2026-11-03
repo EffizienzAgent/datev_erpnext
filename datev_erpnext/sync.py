@@ -5,7 +5,7 @@ from frappe.utils import getdate
 
 from datev_erpnext.clients import client_for
 from datev_erpnext.images import document_image
-from datev_erpnext.lines import sales_invoice_lines
+from datev_erpnext.lines import check_tax_keys, sales_invoice_lines
 from datev_erpnext.parties import party_account_for
 from datev_erpnext.payments import is_bank_voucher
 
@@ -195,7 +195,7 @@ def _sync(client, invoice, image: tuple[str, bytes]) -> str | None:
 	lines = sales_invoice_lines(invoice)
 	if not lines:
 		return None
-	_check_tax_keys(client, lines)
+	check_tax_keys(client, lines)
 	posting_text = _posting_text(invoice)
 	party = party_account_for(client, invoice.customer)
 	file_name, content = image
@@ -228,18 +228,6 @@ def _sync(client, invoice, image: tuple[str, bytes]) -> str | None:
 			due_date=invoice.due_date,
 		)
 	return document
-
-
-def _check_tax_keys(client, lines):
-	known = {row.tax_code for row in client.tax_keys}
-	for line in lines:
-		if line.tax_code not in known:
-			frappe.throw(
-				_(
-					"Tax code {0} has no row in the tax keys of DATEV Client {1}. Add it to the DATEV Client's tax keys; leave the BU key empty for automatic accounts."
-				).format(line.tax_code, client.name),
-				frappe.ValidationError,
-			)
 
 
 def _posting_text(invoice) -> str:

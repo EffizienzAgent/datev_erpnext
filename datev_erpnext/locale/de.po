@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: DATEV for ERPNext\n"
 "Report-Msgid-Bugs-To: oss@effizienzagent.de\n"
-"POT-Creation-Date: 2026-11-03 08:30+0000\n"
+"POT-Creation-Date: 2026-11-03 08:36+0000\n"
 "PO-Revision-Date: 2026-11-02 13:27+0000\n"
 "Last-Translator: oss@effizienzagent.de\n"
 "Language: de\n"
@@ -18,7 +18,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: datev_erpnext/lines.py:34
+#: datev_erpnext/lines.py:36
 #, python-brace-format
 msgid "Account {0} has no numeric account number"
 msgstr "Konto {0} hat keine numerische Kontonummer"
@@ -27,12 +27,12 @@ msgstr "Konto {0} hat keine numerische Kontonummer"
 msgid "Amount"
 msgstr "Betrag"
 
-#: datev_erpnext/lines.py:182
+#: datev_erpnext/lines.py:223
 #, python-brace-format
 msgid "Booking lines of invoice {0} differ from its total by {1}"
 msgstr "Die Buchungszeilen der Rechnung {0} weichen um {1} vom Rechnungsbetrag ab"
 
-#: datev_erpnext/lines.py:56
+#: datev_erpnext/lines.py:58
 #, python-brace-format
 msgid "Charges on account {0} are not supported yet"
 msgstr "Zusatzkosten auf Konto {0} werden noch nicht unterstützt"
@@ -75,12 +75,12 @@ msgstr "DATEV-Zeile {0} ist im Stapel {1}, der gerade gesendet wird. Bitte erneu
 msgid "DATEV note: {0}"
 msgstr "DATEV-Hinweis: {0}"
 
-#: datev_erpnext/sync.py:355
+#: datev_erpnext/sync.py:343
 #, python-brace-format
 msgid "DATEV status is not available for {0}."
 msgstr "Für {0} ist kein DATEV-Status verfügbar."
 
-#: datev_erpnext/sync.py:259
+#: datev_erpnext/sync.py:247
 msgid "DATEV sync is disabled in DATEV ERPNext Settings."
 msgstr "Die DATEV-Synchronisierung ist in den DATEV-ERPNext-Einstellungen deaktiviert."
 
@@ -130,12 +130,12 @@ msgstr "Feldname am Kunden, der als bevorzugte Debitorennummer verwendet wird. L
 msgid "Fieldname on Supplier used as preferred creditor number. Leave empty to let the DATEV app assign numbers."
 msgstr "Feldname am Lieferanten, der als bevorzugte Kreditorennummer verwendet wird. Leer lassen, damit die DATEV-App die Nummern vergibt."
 
-#: datev_erpnext/lines.py:170
+#: datev_erpnext/lines.py:211
 #, python-brace-format
 msgid "Invoice {0} has a total of zero but booking lines that are not zero. DATEV cannot take a document without an amount."
 msgstr "Rechnung {0} hat einen Gesamtbetrag von null, aber Buchungszeilen ungleich null. DATEV kann keinen Beleg ohne Betrag übernehmen."
 
-#: datev_erpnext/lines.py:124
+#: datev_erpnext/lines.py:133
 #, python-brace-format
 msgid "Invoice {0} has a write-off. Write-offs are not supported yet."
 msgstr "Rechnung {0} enthält eine Abschreibung. Abschreibungen werden noch nicht unterstützt."
@@ -163,27 +163,42 @@ msgstr "Leer lassen, um das Standard-Druckformat der Ausgangsrechnung zu verwend
 msgid "Line for purchase invoice {0} is waiting for purchase invoices to be synced."
 msgstr "Die Zeile zur Eingangsrechnung {0} wartet, bis Eingangsrechnungen synchronisiert werden."
 
-#: datev_erpnext/lines.py:83
+#: datev_erpnext/lines.py:89
+#, python-brace-format
+msgid "Line on account {0} has no tax template. Set an item tax template or a purchase taxes template."
+msgstr "Die Zeile auf Konto {0} hat keine Steuervorlage. Bitte eine Artikel-Steuervorlage oder eine Vorlage für Einkaufssteuern hinterlegen."
+
+#: datev_erpnext/lines.py:85
 #, python-brace-format
 msgid "Line on account {0} has no tax template. Set an item tax template or a sales taxes template."
 msgstr "Die Zeile auf Konto {0} hat keine Steuervorlage. Hinterlegen Sie eine Artikel-Steuervorlage oder eine Vorlage für Verkaufssteuern und -abgaben."
 
-#: datev_erpnext/lines.py:114
+#: datev_erpnext/purchases.py:51
+#, python-brace-format
+msgid "Line on account {0} uses deferred expense, which is not supported yet."
+msgstr "Die Zeile auf Konto {0} verwendet einen Rechnungsabgrenzungsposten, der noch nicht unterstützt wird."
+
+#: datev_erpnext/lines.py:123
 #, python-brace-format
 msgid "Line on account {0} with tax template {1} expects a rate of {2} but {3} is applied."
 msgstr "Die Zeile auf Konto {0} mit Steuervorlage {1} erwartet einen Steuersatz von {2}, angewendet ist aber {3}."
+
+#: datev_erpnext/purchases.py:46
+#, python-brace-format
+msgid "Line on account {0}: goods receipts are not supported yet."
+msgstr "Zeile auf Konto {0}: Wareneingänge werden noch nicht unterstützt."
 
 #: datev_erpnext/clients.py:9
 #, python-brace-format
 msgid "More than one enabled DATEV Client is assigned to company {0}."
 msgstr "Der Firma {0} ist mehr als ein aktiver DATEV Mandant zugeordnet."
 
-#: datev_erpnext/parties.py:45 datev_erpnext/sync.py:261
+#: datev_erpnext/parties.py:45 datev_erpnext/sync.py:249
 #, python-brace-format
 msgid "No enabled DATEV Client is assigned to company {0}."
 msgstr "Der Firma {0} ist kein aktiver DATEV Mandant zugeordnet."
 
-#: datev_erpnext/lines.py:103
+#: datev_erpnext/lines.py:112
 #, python-brace-format
 msgid "None of the tax accounts of tax template {0} is in the taxes of invoice {1}."
 msgstr "Keines der Steuerkonten der Steuervorlage {0} ist in den Steuern der Rechnung {1} enthalten."
@@ -235,6 +250,16 @@ msgstr "Druckformat"
 msgid "Print format"
 msgstr "Druckformat"
 
+#: datev_erpnext/purchases.py:99
+#, python-brace-format
+msgid "Purchase invoice {0} has no supplier invoice number."
+msgstr "Die Eingangsrechnung {0} hat keine Rechnungsnummer des Lieferanten."
+
+#: datev_erpnext/purchases.py:38
+#, python-brace-format
+msgid "Purchase invoice {0} is paid on the invoice. This is not supported yet."
+msgstr "Die Eingangsrechnung {0} ist direkt auf der Rechnung bezahlt. Das wird noch nicht unterstützt."
+
 #: datev_erpnext/datev_erpnext/report/vouchers_without_datev/vouchers_without_datev.py:39
 msgid "Reason"
 msgstr "Grund"
@@ -266,17 +291,32 @@ msgstr "Synchronisieren ab"
 msgid "System Manager"
 msgstr "Systemmanager"
 
-#: datev_erpnext/sync.py:239
+#: datev_erpnext/lines.py:242
 #, python-brace-format
 msgid "Tax code {0} has no row in the tax keys of DATEV Client {1}. Add it to the DATEV Client's tax keys; leave the BU key empty for automatic accounts."
 msgstr "Das Steuerkennzeichen {0} hat keine Zeile in den Steuerschlüsseln des DATEV Mandanten {1}. Ergänzen Sie es in den Steuerschlüsseln des DATEV Mandanten; lassen Sie den BU-Schlüssel bei Automatikkonten leer."
 
-#: datev_erpnext/lines.py:48
+#: datev_erpnext/lines.py:249
+#, python-brace-format
+msgid "Tax code {0} is a reverse charge template and needs a BU key in the tax keys of DATEV Client {1}."
+msgstr "Steuercode {0} ist eine Reverse-Charge-Vorlage und benötigt einen BU-Schlüssel in den Steuerschlüsseln des DATEV Mandanten {1}."
+
+#: datev_erpnext/purchases.py:85
+#, python-brace-format
+msgid "Tax row on account {0} deducts tax without a matching input tax row. Only reverse charge pairs are supported."
+msgstr "Die Steuerzeile auf Konto {0} zieht Steuer ab, ohne passende Vorsteuerzeile. Unterstützt werden nur Reverse-Charge-Paare."
+
+#: datev_erpnext/purchases.py:64
+#, python-brace-format
+msgid "Tax row on account {0} has category {1}, which is not supported yet."
+msgstr "Die Steuerzeile auf Konto {0} hat die Kategorie {1}, die noch nicht unterstützt wird."
+
+#: datev_erpnext/lines.py:50
 #, python-brace-format
 msgid "Tax row on account {0} uses charge type {1}, which is not supported yet."
 msgstr "Die Steuerzeile auf Konto {0} verwendet die Berechnungsart {1}, die noch nicht unterstützt wird."
 
-#: datev_erpnext/sync.py:252
+#: datev_erpnext/sync.py:240
 #, python-brace-format
 msgid "The posting text template {0} is invalid"
 msgstr "Die Vorlage für den Buchungstext {0} ist ungültig"
