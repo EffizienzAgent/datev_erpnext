@@ -5,7 +5,7 @@ from frappe.model.document import Document
 
 class DATEVERPNextSettings(Document):
 	def validate(self):
-		if self.customer_number_field and not frappe.get_meta("Customer").has_field(
-			self.customer_number_field
-		):
-			frappe.throw(_("{0} is not a field of Customer.").format(self.customer_number_field))
+		for field, doctype in (("customer_number_field", "Customer"), ("supplier_number_field", "Supplier")):
+			value = self.get(field)
+			if value and not frappe.get_meta(doctype).has_field(value):
+				frappe.throw(_("{0} is not a field of {1}.").format(value, _(doctype)))

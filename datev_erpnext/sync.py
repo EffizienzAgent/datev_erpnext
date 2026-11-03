@@ -7,22 +7,77 @@ from datev_erpnext.clients import client_for
 from datev_erpnext.images import document_image
 from datev_erpnext.lines import sales_invoice_lines
 from datev_erpnext.parties import party_account_for
+from datev_erpnext.payments import is_bank_voucher
 
 SETTINGS = "DATEV ERPNext Settings"
+SALES_INVOICE = "Sales Invoice"
+PAYMENT_DOCTYPES = ("Payment Entry", "Journal Entry")
 SYNC_JOB = "datev_erpnext.sync.sync_sales_invoice"
+PAYMENT_JOB = "datev_erpnext.payment_sync.sync_payment"
 CATCH_UP_LIMIT = 500
 ERROR = "datev_erpnext:error"
 NOT_TRANSFERRED = "datev_erpnext:not_transferred"
 CLIENT_DISABLED = "datev_erpnext:client_disabled"
-SUBJECTS = (ERROR, NOT_TRANSFERRED, CLIENT_DISABLED)
+WAITING = "datev_erpnext:waiting"
+SUBJECTS = (ERROR, NOT_TRANSFERRED, CLIENT_DISABLED, WAITING)
+SOURCES = {
+	"Sales Invoice": {
+		"party_type": "'Customer'",
+		"party": "voucher.customer",
+		"party_name": "voucher.customer_name",
+		"amount": "voucher.base_grand_total",
+	},
+	"Payment Entry": {
+		"party_type": "voucher.party_type",
+		"party": "voucher.party",
+		"party_name": "voucher.party_name",
+		"amount": "if(voucher.payment_type = 'Receive', voucher.base_received_amount, voucher.base_paid_amount)",
+	},
+	"Journal Entry": {
+		"party_type": "null",
+		"party": "null",
+		"party_name": "null",
+		"amount": "voucher.total_debit",
+		"condition": """and exists (
+				select 1 from `tabJournal Entry Account` row
+				join `tabAccount` account on account.name = row.account
+				where row.parent = voucher.name and account.account_type in ('Bank', 'Cash')
+			)""",
+	},
+}
 
 
-def source_key(name: str) -> str:
-	return f"Sales Invoice:{name}"
+def source_key(name: str, doctype: str = SALES_INVOICE) -> str:
+	return f"{doctype}:{name}"
+
+
+def enqueue_sync(doctype: str, name: str, **kwargs):
+	if doctype == SALES_INVOICE:
+		frappe.enqueue(SYNC_JOB, name=name, job_id=f"datev-sync-{name}", deduplicate=True, **kwargs)
+	else:
+		frappe.enqueue(
+			PAYMENT_JOB,
+			doctype=doctype,
+			name=name,
+			job_id=f"datev-sync-{source_key(name, doctype)}",
+			deduplicate=True,
+			**kwargs,
+		)
 
 
 def _enqueue(name: str, **kwargs):
-	frappe.enqueue(SYNC_JOB, name=name, job_id=f"datev-sync-{name}", deduplicate=True, **kwargs)
+	enqueue_sync(SALES_INVOICE, name, **kwargs)
+
+
+def synced_doctypes(settings) -> list[str]:
+	doctypes = [SALES_INVOICE]
+	if settings.sync_payments:
+		doctypes.extend(PAYMENT_DOCTYPES)
+	return doctypes
+
+
+def is_relevant(doc) -> bool:
+	return doc.doctype != "Journal Entry" or is_bank_voucher(doc)
 
 
 def _in_sync_period(invoice) -> bool:
@@ -31,14 +86,20 @@ def _in_sync_period(invoice) -> bool:
 
 
 def _is_opening(invoice) -> bool:
-	return invoice.is_opening == "Yes"
+	return invoice.get("is_opening") == "Yes"
 
 
 def on_submit(doc, method=None):
 	messages = len(frappe.local.message_log)
 	try:
 		settings = frappe.get_single(SETTINGS)
-		if settings.enabled and settings.sync_from_date and not _is_opening(doc):
+		if (
+			settings.enabled
+			and settings.sync_from_date
+			and not _is_opening(doc)
+			and doc.doctype in synced_doctypes(settings)
+			and is_relevant(doc)
+		):
 			_queue_on_submit(doc, getdate(settings.sync_from_date))
 	except Exception as error:
 		frappe.local.message_log = frappe.local.message_log[:messages]
@@ -50,7 +111,7 @@ def _queue_on_submit(doc, sync_from_date):
 	if not client_for(doc.company):
 		_comment_if_client_disabled(doc)
 	elif getdate(doc.posting_date) >= sync_from_date:
-		_enqueue(doc.name, queue="short", enqueue_after_commit=True)
+		enqueue_sync(doc.doctype, doc.name, queue="short", enqueue_after_commit=True)
 	elif getdate(doc.modified) >= sync_from_date:
 		_note(doc, NOT_TRANSFERRED, _("posting date before sync from date, not transferred."))
 
@@ -71,7 +132,7 @@ def _note(doc, subject: str, message: str):
 
 def _add_comment(doc, subject: str, text: str):
 	try:
-		latest = latest_comments([doc.name]).get(doc.name)
+		latest = latest_comments([doc.name], doc.doctype).get(doc.name)
 		if latest and latest.content == text:
 			return
 		frappe.get_doc(
@@ -210,40 +271,54 @@ def catch_up():
 	if not settings.enabled or not settings.sync_from_date:
 		return
 	companies = frappe.get_all("DATEV Client", filters={"enabled": 1}, pluck="company", distinct=True)
-	for invoice in missing_invoices(companies, settings.sync_from_date, limit=CATCH_UP_LIMIT):
-		_enqueue(invoice.name, queue="long")
+	for doctype in synced_doctypes(settings):
+		for voucher in missing_invoices(
+			companies, settings.sync_from_date, limit=CATCH_UP_LIMIT, doctype=doctype
+		):
+			enqueue_sync(doctype, voucher.name, queue="long")
+	if settings.sync_payments:
+		from datev_erpnext.payment_sync import changed_payments
+
+		for doctype, name in changed_payments(companies, limit=CATCH_UP_LIMIT):
+			enqueue_sync(doctype, name, queue="long")
 
 
-def missing_invoices(companies: list[str], from_date, to_date=None, limit: int | None = None) -> list:
+def missing_invoices(
+	companies: list[str], from_date, to_date=None, limit: int | None = None, doctype: str = SALES_INVOICE
+) -> list:
 	if not companies:
 		return []
-	to_date_filter = "and invoice.posting_date <= %(to_date)s" if to_date else ""
+	source = SOURCES[doctype]
+	to_date_filter = "and voucher.posting_date <= %(to_date)s" if to_date else ""
 	limit_clause = "limit %(limit)s" if limit else ""
 	return frappe.db.sql(
 		f"""
-		select invoice.name, invoice.company, invoice.posting_date, invoice.customer,
-			invoice.customer_name, invoice.base_grand_total
-		from `tabSales Invoice` invoice
-		where invoice.company in %(companies)s
-			and invoice.docstatus = 1
-			and ifnull(invoice.is_opening, '') != 'Yes'
-			and invoice.posting_date >= %(from_date)s
+		select %(doctype)s as voucher_type, voucher.name, voucher.company, voucher.posting_date,
+			{source["party_type"]} as party_type, {source["party"]} as party,
+			{source["party_name"]} as party_name, {source["amount"]} as amount
+		from `tab{doctype}` voucher
+		where voucher.company in %(companies)s
+			and voucher.docstatus = 1
+			and ifnull(voucher.is_opening, '') != 'Yes'
+			and voucher.posting_date >= %(from_date)s
 			{to_date_filter}
+			{source.get("condition", "")}
 			and not exists (
 				select 1 from `tabDATEV Document` document
-				where document.source_key = concat('Sales Invoice:', invoice.name)
+				where document.source_key = concat(%(doctype)s, ':', voucher.name)
 			)
 		order by exists (
 				select 1 from `tabComment` comment
-				where comment.reference_doctype = 'Sales Invoice'
-					and comment.reference_name = invoice.name
+				where comment.reference_doctype = %(doctype)s
+					and comment.reference_name = voucher.name
 					and comment.subject in %(subjects)s
-					and comment.creation >= invoice.modified
+					and comment.creation >= voucher.modified
 			),
-			invoice.posting_date, invoice.name
+			voucher.posting_date, voucher.name
 		{limit_clause}
 		""",
 		{
+			"doctype": doctype,
 			"companies": tuple(companies),
 			"from_date": from_date,
 			"to_date": to_date,
@@ -254,13 +329,13 @@ def missing_invoices(companies: list[str], from_date, to_date=None, limit: int |
 	)
 
 
-def latest_comments(names: list[str]) -> dict[str, frappe._dict]:
+def latest_comments(names: list[str], doctype: str = SALES_INVOICE) -> dict[str, frappe._dict]:
 	if not names:
 		return {}
 	comments = frappe.get_all(
 		"Comment",
 		filters={
-			"reference_doctype": "Sales Invoice",
+			"reference_doctype": doctype,
 			"reference_name": ("in", names),
 			"comment_type": "Comment",
 			"subject": ("in", SUBJECTS),
@@ -275,15 +350,19 @@ def latest_comments(names: list[str]) -> dict[str, frappe._dict]:
 
 
 @frappe.whitelist()
-def datev_status(name: str) -> dict:
-	frappe.has_permission("Sales Invoice", "read", doc=name, throw=True)
+def datev_status(name: str, doctype: str = SALES_INVOICE) -> dict:
+	if doctype not in SOURCES:
+		frappe.throw(_("DATEV status is not available for {0}.").format(_(doctype)))
+	frappe.has_permission(doctype, "read", doc=name, throw=True)
 	document = frappe.db.get_value(
 		"DATEV Document",
-		{"source_key": source_key(name)},
+		{"source_key": source_key(name, doctype)},
 		["name", "status", "external_id", "modified"],
 		as_dict=True,
 	)
-	comment = latest_comments([name]).get(name)
+	if not document and not _shows_status(doctype, name):
+		return {"hidden": True}
+	comment = latest_comments([name], doctype).get(name)
 	error = (
 		bool(comment) and comment.subject == ERROR and (not document or comment.creation > document.modified)
 	)
@@ -302,3 +381,10 @@ def datev_status(name: str) -> dict:
 		"error": error,
 		"notice": notice,
 	}
+
+
+def _shows_status(doctype: str, name: str) -> bool:
+	settings = frappe.get_single(SETTINGS)
+	if doctype not in synced_doctypes(settings):
+		return False
+	return is_relevant(frappe.get_doc(doctype, name))

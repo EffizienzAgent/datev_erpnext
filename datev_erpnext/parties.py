@@ -4,10 +4,16 @@ from frappe import _
 
 from datev_erpnext.clients import client_for
 
+PARTIES = {
+	"Customer": ("Debtor", "customer_name", "customer_number_field"),
+	"Supplier": ("Creditor", "supplier_name", "supplier_number_field"),
+}
 
-def _preferred_number(customer: str) -> int | None:
-	field = frappe.db.get_single_value("DATEV ERPNext Settings", "customer_number_field")
-	value = frappe.db.get_value("Customer", customer, field) if field else None
+
+def _preferred_number(party_type: str, party: str) -> int | None:
+	setting = PARTIES[party_type][2]
+	field = frappe.db.get_single_value("DATEV ERPNext Settings", setting)
+	value = frappe.db.get_value(party_type, party, field) if field else None
 	try:
 		number = int(str(value).strip())
 	except TypeError, ValueError:
@@ -15,18 +21,19 @@ def _preferred_number(customer: str) -> int | None:
 	return number if number > 0 else None
 
 
-def party_account_for(client, customer: str) -> str:
-	frappe.db.get_value("Customer", customer, "name", for_update=True)
-	name, tax_id = frappe.db.get_value("Customer", customer, ["customer_name", "tax_id"])
+def party_account_for(client, party: str, party_type: str = "Customer") -> str:
+	kind, name_field, _setting = PARTIES[party_type]
+	frappe.db.get_value(party_type, party, "name", for_update=True)
+	name, tax_id = frappe.db.get_value(party_type, party, [name_field, "tax_id"])
 	return ensure_party_account(
 		client.name,
-		"Debtor",
-		party_type="Customer",
-		party=customer,
+		kind,
+		party_type=party_type,
+		party=party,
 		party_name=name,
 		vat_id=tax_id,
 		iban=None,
-		preferred_number=_preferred_number(customer),
+		preferred_number=_preferred_number(party_type, party),
 	)
 
 

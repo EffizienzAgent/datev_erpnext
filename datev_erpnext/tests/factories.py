@@ -64,6 +64,11 @@ def _ensure_masters():
 		).insert()
 	if not frappe.db.exists("Warehouse Type", "Transit"):
 		frappe.get_doc({"doctype": "Warehouse Type", "name": "Transit"}).insert()
+	for party_type, account_type in (("Customer", "Receivable"), ("Supplier", "Payable")):
+		if not frappe.db.exists("Party Type", party_type):
+			frappe.get_doc(
+				{"doctype": "Party Type", "party_type": party_type, "account_type": account_type}
+			).insert()
 	for doctype, field, root, leaf in (
 		("Item Group", "item_group_name", "All Item Groups", "Services"),
 		("Customer Group", "customer_group_name", "All Customer Groups", "Commercial"),
