@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/EffizienzAgent/datev_erpnext/compare/v0.3.1...v0.3.2) (2026-11-03)
+
+
+### Bug Fixes
+
+* support e-invoice tax rows and reverse charge over item tax templates ([#8](https://github.com/EffizienzAgent/datev_erpnext/issues/8)) ([995fb53](https://github.com/EffizienzAgent/datev_erpnext/commit/995fb538c19ce70e987187c1c02a3220b4f3188c))
+
 ## [0.3.1](https://github.com/EffizienzAgent/datev_erpnext/compare/v0.3.0...v0.3.1) (2026-11-03)
 
 
