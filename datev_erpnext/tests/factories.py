@@ -3,6 +3,7 @@ from frappe.utils import getdate, nowdate
 
 COMPANY_NAME = "Datev Test GmbH"
 CUSTOMER_NAME = "Muster Automaten GmbH"
+SUPPLIER_NAME = "Muster Lieferant GmbH"
 TAX_ID = "DE123456789"
 PRICE_LIST = "Standard Selling"
 ACCOUNT_TEMPLATE = "DE 19 % alle Konten"
@@ -15,6 +16,12 @@ ACCOUNTS = (
 	("USt 7 %", "3801", "Tax", "Duties and Taxes", 7),
 	("Vorsteuer 19 %", "1406", "Tax", "Tax Assets", 19),
 	("Forderungen aus Lieferungen und Leistungen", "1200", "Receivable", "Accounts Receivable", 0),
+	("Verbindlichkeiten aus Lieferungen und Leistungen", "3300", "Payable", "Accounts Payable", 0),
+	("Geleistete Anzahlungen", "1186", "Payable", "Loans and Advances (Assets)", 0),
+	("Bank", "1800", "Bank", "Bank Accounts", 0),
+	("Sparkasse", "1810", "Bank", "Bank Accounts", 0),
+	("Nebenkosten des Geldverkehrs", "6855", "Expense Account", "Indirect Expenses", 0),
+	("Bürobedarf", "6815", "Expense Account", "Indirect Expenses", 0),
 )
 
 
@@ -38,6 +45,7 @@ def make_company(abbr="DTV") -> str:
 	_ensure_templates(company)
 	_ensure_items(company)
 	_ensure_customer()
+	_ensure_supplier()
 	return company.name
 
 
@@ -60,6 +68,7 @@ def _ensure_masters():
 		("Item Group", "item_group_name", "All Item Groups", "Services"),
 		("Customer Group", "customer_group_name", "All Customer Groups", "Commercial"),
 		("Territory", "territory_name", "All Territories", "Germany"),
+		("Supplier Group", "supplier_group_name", "All Supplier Groups", "Services"),
 	):
 		if not frappe.db.exists(doctype, root):
 			frappe.get_doc({"doctype": doctype, field: root, "is_group": 1}).insert()
@@ -85,13 +94,17 @@ def _ensure_accounts(company):
 				"is_group": 0,
 			}
 		).insert()
-	receivable = _account(company, "1200")
-	if company.default_receivable_account != receivable:
-		company.db_set("default_receivable_account", receivable)
+	for field, number in (("default_receivable_account", "1200"), ("default_payable_account", "3300")):
+		if company.get(field) != _account(company, number):
+			company.db_set(field, _account(company, number))
 
 
 def _account(company, number) -> str:
-	return frappe.db.get_value("Account", {"company": company.name, "account_number": number}, "name")
+	return account(company.name, number)
+
+
+def account(company: str, number: str) -> str:
+	return frappe.db.get_value("Account", {"company": company, "account_number": number}, "name")
 
 
 def _ensure_fiscal_year(company):
@@ -202,6 +215,29 @@ def _ensure_customer():
 	).insert()
 
 
+def _ensure_supplier():
+	if frappe.db.exists("Supplier", {"supplier_name": SUPPLIER_NAME}):
+		return
+	frappe.get_doc(
+		{
+			"doctype": "Supplier",
+			"supplier_name": SUPPLIER_NAME,
+			"supplier_type": "Company",
+			"supplier_group": "Services",
+			"country": "Germany",
+			"tax_id": "DE987654321",
+		}
+	).insert()
+
+
+def customer() -> str:
+	return frappe.db.get_value("Customer", {"customer_name": CUSTOMER_NAME})
+
+
+def supplier() -> str:
+	return frappe.db.get_value("Supplier", {"supplier_name": SUPPLIER_NAME})
+
+
 def make_client(company, **overrides):
 	abbr = frappe.db.get_value("Company", company, "abbr")
 	values = {
@@ -252,3 +288,72 @@ def make_invoice(company, items, **overrides):
 		invoice.taxes_and_charges = f"DE 19 % - {frappe.db.get_value('Company', company, 'abbr')}"
 		invoice.append_taxes_from_master()
 	return invoice.insert()
+
+
+def make_payment(company, references=(), amount=None, deductions=(), **overrides):
+	payment_type = overrides.pop("payment_type", "Receive")
+	party_type = overrides.pop("party_type", "Customer" if payment_type == "Receive" else "Supplier")
+	party = overrides.pop("party", customer() if party_type == "Customer" else supplier())
+	party_account = account(company, "1200" if party_type == "Customer" else "3300")
+	bank = account(company, "1800")
+	fee = sum(value for _number, value in deductions)
+	paid = amount if amount is not None else sum(allocated for _name, allocated in references) - fee
+	values = {
+		"doctype": "Payment Entry",
+		"company": company,
+		"payment_type": payment_type,
+		"posting_date": nowdate(),
+		"party_type": party_type,
+		"party": party,
+		"paid_from": party_account if payment_type == "Receive" else bank,
+		"paid_to": bank if payment_type == "Receive" else party_account,
+		"paid_amount": paid,
+		"received_amount": paid,
+		"reference_no": "Bank",
+		"reference_date": nowdate(),
+		"references": [
+			{
+				"reference_doctype": "Sales Invoice" if party_type == "Customer" else "Purchase Invoice",
+				"reference_name": name,
+				"allocated_amount": allocated,
+			}
+			for name, allocated in references
+		],
+		"deductions": [
+			{
+				"account": account(company, number),
+				"cost_center": frappe.get_cached_value("Company", company, "cost_center"),
+				"amount": value,
+			}
+			for number, value in deductions
+		],
+	}
+	values.update(overrides)
+	payment = frappe.get_doc(values)
+	payment.setup_party_account_field()
+	payment.set_missing_values()
+	payment.set_missing_ref_details()
+	return payment.insert()
+
+
+def make_journal(company, rows, **overrides):
+	values = {
+		"doctype": "Journal Entry",
+		"company": company,
+		"posting_date": nowdate(),
+		"cheque_no": "Bank",
+		"cheque_date": nowdate(),
+		"accounts": [
+			{
+				"account": account(company, number),
+				"debit_in_account_currency": debit,
+				"credit_in_account_currency": credit,
+				"cost_center": frappe.get_cached_value("Company", company, "cost_center"),
+				**extra,
+			}
+			for number, debit, credit, *rest in rows
+			for extra in [rest[0] if rest else {}]
+		],
+	}
+	values.update(overrides)
+	return frappe.get_doc(values).insert()
