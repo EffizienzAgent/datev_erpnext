@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/EffizienzAgent/datev_erpnext/compare/v0.3.0...v0.3.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* respect tax-key direction ([#6](https://github.com/EffizienzAgent/datev_erpnext/issues/6)) ([1c74db3](https://github.com/EffizienzAgent/datev_erpnext/commit/1c74db3385f0a1b9852b06ce5fc4bb5e73e20721))
+
 ## [0.3.0](https://github.com/EffizienzAgent/datev_erpnext/compare/v0.2.0...v0.3.0) (2026-11-03)
 
 
