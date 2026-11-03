@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: DATEV for ERPNext VERSION\n"
 "Report-Msgid-Bugs-To: oss@effizienzagent.de\n"
-"POT-Creation-Date: 2026-11-03 09:12+0000\n"
-"PO-Revision-Date: 2026-11-03 09:12+0000\n"
+"POT-Creation-Date: 2026-11-03 09:29+0000\n"
+"PO-Revision-Date: 2026-11-03 09:29+0000\n"
 "Last-Translator: oss@effizienzagent.de\n"
 "Language-Team: oss@effizienzagent.de\n"
 "MIME-Version: 1.0\n"
@@ -36,7 +36,7 @@ msgid "Charges on account {0} are not supported yet"
 msgstr ""
 
 #. Label of the checked_at (Datetime) field in DocType 'DATEV Payment Check'
-#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:24
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:27
 msgid "Checked At"
 msgstr ""
 
@@ -65,16 +65,16 @@ msgstr ""
 
 #. Name of a role
 #: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:14
-#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:39
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:59
 msgid "DATEV Manager"
 msgstr ""
 
 #. Name of a DocType
-#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:30
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:50
 msgid "DATEV Payment Check"
 msgstr ""
 
-#: datev_erpnext/payment_sync.py:225
+#: datev_erpnext/payment_sync.py:226
 #, python-brace-format
 msgid "DATEV line {0} is in batch {1}, which is being sent. Try again once the batch is done."
 msgstr ""
@@ -84,7 +84,7 @@ msgstr ""
 msgid "DATEV note: {0}"
 msgstr ""
 
-#: datev_erpnext/sync.py:427
+#: datev_erpnext/sync.py:436
 #, python-brace-format
 msgid "DATEV status is not available for {0}."
 msgstr ""
@@ -167,7 +167,7 @@ msgstr ""
 msgid "Leave empty to use the default print format of Sales Invoice."
 msgstr ""
 
-#: datev_erpnext/payments.py:217
+#: datev_erpnext/payments.py:224
 #, python-brace-format
 msgid "Line for purchase invoice {0} is waiting for purchase invoices to be synced."
 msgstr ""
@@ -220,7 +220,7 @@ msgstr ""
 msgid "Party Name"
 msgstr ""
 
-#: datev_erpnext/payments.py:53
+#: datev_erpnext/payments.py:55
 #, python-brace-format
 msgid "Payment Entry {0} has no bank or cash account on its bank side."
 msgstr ""
@@ -305,7 +305,7 @@ msgid "Send submitted Purchase Invoices with the supplier's document to DATEV, f
 msgstr ""
 
 #. Label of the source_key (Data) field in DocType 'DATEV Payment Check'
-#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:16
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:19
 msgid "Source Key"
 msgstr ""
 
@@ -333,7 +333,7 @@ msgstr ""
 
 #. Name of a role
 #: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:19
-#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:35
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:55
 msgid "System Manager"
 msgstr ""
 
@@ -362,6 +362,11 @@ msgstr ""
 msgid "Tax row on account {0} uses charge type {1}, which is not supported yet."
 msgstr ""
 
+#: datev_erpnext/payments.py:120
+#, python-brace-format
+msgid "The advance allocation of row {0} in {1} cannot be mapped: it needs one party line on a receivable or payable account and one line on a separate advance account."
+msgstr ""
+
 #: datev_erpnext/sync.py:323
 #, python-brace-format
 msgid "The posting text template {0} is invalid"
@@ -381,7 +386,24 @@ msgstr ""
 msgid "Vouchers without DATEV"
 msgstr ""
 
-#: datev_erpnext/payments.py:236
+#. Label of the waiting_reason (Small Text) field in DocType 'DATEV Payment
+#. Check'
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:44
+msgid "Waiting Reason"
+msgstr ""
+
+#. Label of the waiting_name (Dynamic Link) field in DocType 'DATEV Payment
+#. Check'
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:39
+msgid "Waiting for"
+msgstr ""
+
+#. Label of the waiting_doctype (Link) field in DocType 'DATEV Payment Check'
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:33
+msgid "Waiting for Type"
+msgstr ""
+
+#: datev_erpnext/payments.py:246
 #, python-brace-format
 msgid "Waiting for {0} {1} to be transferred to DATEV."
 msgstr ""
@@ -391,7 +413,7 @@ msgstr ""
 msgid "When the adapter last compared a payment's ledger with its DATEV lines."
 msgstr ""
 
-#: datev_erpnext/payment_sync.py:64 datev_erpnext/sync.py:219
+#: datev_erpnext/payment_sync.py:65 datev_erpnext/sync.py:219
 msgid "no booking lines, not transferred."
 msgstr ""
 

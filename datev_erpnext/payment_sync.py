@@ -27,6 +27,7 @@ def sync_payment(doctype: str, name: str, from_backfill: bool = False) -> str | 
 	voucher = frappe.get_doc(doctype, name)
 	if not _should_sync(voucher, from_backfill):
 		return None
+	checked_at = now_datetime()
 	try:
 		client = client_for(voucher.company)
 		if not client:
@@ -35,12 +36,12 @@ def sync_payment(doctype: str, name: str, from_backfill: bool = False) -> str | 
 		locked = frappe.get_doc(doctype, name, for_update=True)
 		if not _should_sync(locked, from_backfill):
 			return None
-		checked_at = now_datetime()
 		document = _sync(client, locked)
 		mark_checked(doctype, name, checked_at)
 		return document
 	except Waiting as waiting:
 		sync._note(voucher, sync.WAITING, str(waiting))
+		mark_checked(doctype, name, checked_at, waiting)
 		return None
 	except Exception as error:
 		frappe.db.rollback()
@@ -279,14 +280,45 @@ def _queue_recompute(doctype: str, name: str):
 		frappe.log_error(f"DATEV recompute could not be queued for {doctype} {name}")
 
 
-def mark_checked(doctype: str, name: str, checked_at) -> None:
+def mark_checked(doctype: str, name: str, checked_at, waiting: Waiting | None = None) -> None:
 	key = sync.source_key(name, doctype)
+	values = {
+		"checked_at": checked_at,
+		"waiting_doctype": waiting.doctype if waiting else None,
+		"waiting_name": waiting.name if waiting else None,
+		"waiting_reason": str(waiting) if waiting else None,
+	}
 	if frappe.db.exists(CHECK, key):
-		frappe.db.set_value(CHECK, key, "checked_at", checked_at, update_modified=False)
+		frappe.db.set_value(CHECK, key, values, update_modified=False)
 	else:
-		frappe.get_doc({"doctype": CHECK, "source_key": key, "checked_at": checked_at}).insert(
-			ignore_permissions=True
-		)
+		frappe.get_doc({"doctype": CHECK, "source_key": key, **values}).insert(ignore_permissions=True)
+
+
+WAITING_RECHECK_DAYS = 7
+
+
+def recheck_condition(key_sql: str) -> str:
+	return f"""not exists (
+		select 1 from `tabDATEV Payment Check` checked
+		where checked.name = {key_sql}
+			and ifnull(checked.waiting_name, '') != ''
+			and checked.checked_at > now() - interval {WAITING_RECHECK_DAYS} day
+			and not exists (
+				select 1 from `tabDATEV Document` waited
+				where waited.source_key = concat(checked.waiting_doctype, ':', checked.waiting_name)
+					and waited.creation > checked.checked_at
+			)
+			and not exists (
+				select 1 from `tabSales Invoice` invoice
+				where checked.waiting_doctype = 'Sales Invoice'
+					and invoice.name = checked.waiting_name and invoice.modified > checked.checked_at
+			)
+			and not exists (
+				select 1 from `tabPurchase Invoice` invoice
+				where checked.waiting_doctype = 'Purchase Invoice'
+					and invoice.name = checked.waiting_name and invoice.modified > checked.checked_at
+			)
+	)"""
 
 
 def changed_payments(companies: list[str], doctype: str, limit: int | None = None) -> list[str]:
@@ -312,6 +344,7 @@ def changed_payments(companies: list[str], doctype: str, limit: int | None = Non
 				on document.source_key = concat(%(doctype)s, ':', voucher.name)
 			where voucher.company in %(companies)s
 				and voucher.docstatus = 1
+				and {recheck_condition("document.source_key")}
 		) candidates
 		where changed_at > checked_at
 		order by changed_at desc

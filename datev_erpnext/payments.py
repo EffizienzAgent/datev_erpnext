@@ -17,7 +17,9 @@ SETTINGS = "DATEV ERPNext Settings"
 
 
 class Waiting(frappe.ValidationError):
-	pass
+	def __init__(self, message: str, doctype: str | None = None, name: str | None = None):
+		super().__init__(message)
+		self.doctype, self.name = doctype, name
 
 
 @dataclass(frozen=True)
@@ -113,7 +115,12 @@ def _allocation(voucher, row: str, entries: list) -> tuple:
 	advance = [entry for entry in entries if entry not in party]
 	posting_date = max(entry.posting_date for entry in entries)
 	if not party or not advance:
-		return posting_date, []
+		frappe.throw(
+			_(
+				"The advance allocation of row {0} in {1} cannot be mapped: it needs one party line on a receivable or payable account and one line on a separate advance account."
+			).format(row, voucher.name),
+			frappe.ValidationError,
+		)
 	contra = account_number(advance[0].account)
 	totals = defaultdict(Decimal)
 	for entry in party:
@@ -214,7 +221,9 @@ def _purchase_reference(name: str) -> tuple[str, str | None]:
 	invoice = frappe.get_doc("Purchase Invoice", name)
 	if _in_sync_period(invoice) and not frappe.db.get_single_value(SETTINGS, "sync_purchase_invoices"):
 		raise Waiting(
-			_("Line for purchase invoice {0} is waiting for purchase invoices to be synced.").format(name)
+			_("Line for purchase invoice {0} is waiting for purchase invoices to be synced.").format(name),
+			"Purchase Invoice",
+			name,
 		)
 	return purchase_document_field(invoice), _dependency("Purchase Invoice", name)
 
@@ -233,7 +242,9 @@ def _dependency(doctype: str, name: str) -> str | None:
 		return None
 	document = frappe.db.get_value("DATEV Document", {"source_key": f"{doctype}:{name}"}, "name")
 	if not document:
-		raise Waiting(_("Waiting for {0} {1} to be transferred to DATEV.").format(_(doctype), name))
+		raise Waiting(
+			_("Waiting for {0} {1} to be transferred to DATEV.").format(_(doctype), name), doctype, name
+		)
 	return document
 
 

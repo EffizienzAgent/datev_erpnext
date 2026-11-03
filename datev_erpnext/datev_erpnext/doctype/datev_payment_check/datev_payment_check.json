@@ -6,7 +6,10 @@
  "engine": "InnoDB",
  "field_order": [
   "source_key",
-  "checked_at"
+  "checked_at",
+  "waiting_doctype",
+  "waiting_name",
+  "waiting_reason"
  ],
  "fields": [
   {
@@ -22,10 +25,27 @@
    "fieldtype": "Datetime",
    "in_list_view": 1,
    "label": "Checked At"
+  },
+  {
+   "fieldname": "waiting_doctype",
+   "fieldtype": "Link",
+   "options": "DocType",
+   "label": "Waiting for Type"
+  },
+  {
+   "fieldname": "waiting_name",
+   "fieldtype": "Dynamic Link",
+   "options": "waiting_doctype",
+   "label": "Waiting for"
+  },
+  {
+   "fieldname": "waiting_reason",
+   "fieldtype": "Small Text",
+   "label": "Waiting Reason"
   }
  ],
  "index_web_pages_for_search": 0,
- "modified": "2026-11-03 12:00:00.000000",
+ "modified": "2026-11-03 15:00:00.000000",
  "module": "DATEV ERPNext",
  "name": "DATEV Payment Check",
  "owner": "Administrator",

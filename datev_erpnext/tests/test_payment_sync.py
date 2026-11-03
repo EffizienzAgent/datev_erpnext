@@ -177,6 +177,37 @@ class TestPaymentSync(IntegrationTestCase):
 		self.assertEqual([job["name"] for job in self._jobs()], [payment.name])
 		self.assertTrue(payment_sync.sync_payment("Payment Entry", payment.name))
 
+	def test_waiting_payment_rechecked_only_on_change_or_weekly(self):
+		invoice = make_invoice(self.company, [("MIETE", 1, 100)])
+		invoice.submit()
+		payment = make_payment(self.company, [(invoice.name, 119)])
+		payment.submit()
+		payment_sync.sync_payment("Payment Entry", payment.name)
+		check = frappe.get_doc("DATEV Payment Check", f"Payment Entry:{payment.name}")
+		self.assertEqual((check.waiting_doctype, check.waiting_name), ("Sales Invoice", invoice.name))
+		self.assertIn(invoice.name, check.waiting_reason)
+		frappe.db.set_value(
+			"Sales Invoice", invoice.name, "modified", "2000-01-01 00:00:00", update_modified=False
+		)
+
+		def queued():
+			self.enqueue.reset_mock()
+			sync.catch_up()
+			return payment.name in [job["name"] for job in self._jobs()]
+
+		self.assertFalse(queued())
+		frappe.db.set_value(
+			"Sales Invoice", invoice.name, "modified", "2999-01-01 00:00:00", update_modified=False
+		)
+		self.assertTrue(queued())
+		frappe.db.set_value(
+			"Sales Invoice", invoice.name, "modified", "2000-01-01 00:00:00", update_modified=False
+		)
+		frappe.db.set_value(
+			"DATEV Payment Check", check.name, "checked_at", add_days(nowdate(), -8), update_modified=False
+		)
+		self.assertTrue(queued())
+
 	def test_cancel_before_transfer_discards(self):
 		payment, document = self._synced_payment()
 		payment.cancel()
@@ -321,7 +352,7 @@ class TestPaymentSync(IntegrationTestCase):
 			[(f"1200:{customer()}:{first.name}", first.name)],
 		)
 
-	def test_advance_allocation_on_separate_account(self):
+	def _allocated_advance(self):
 		advance = account(self.company, "3250")
 		company = frappe.get_doc("Company", self.company)
 		for field, value in (
@@ -387,9 +418,59 @@ class TestPaymentSync(IntegrationTestCase):
 			(party, 3250, "H", Decimal("119"), invoice.name, invoice_document),
 		)
 
+		return payment, allocation.name, line
+
+	def test_advance_allocation_on_separate_account(self):
+		payment, allocation, _line = self._allocated_advance()
 		payment.reload()
 		payment.cancel()
-		self.assertEqual(frappe.db.get_value("DATEV Document", allocation.name, "status"), "Discarded")
+		self.assertEqual(frappe.db.get_value("DATEV Document", allocation, "status"), "Discarded")
+
+	def test_unreconcile_advance_allocation_reverses(self):
+		payment, allocation, line = self._allocated_advance()
+		self._transfer(allocation)
+		unreconcile = frappe.get_doc(
+			{
+				"doctype": "Unreconcile Payment",
+				"company": self.company,
+				"voucher_type": "Payment Entry",
+				"voucher_no": payment.name,
+			}
+		)
+		unreconcile.add_references()
+		unreconcile.save()
+		unreconcile.submit()
+
+		payment_sync.sync_payment("Payment Entry", payment.name)
+
+		rows = {row.line_key: row for row in bookings(allocation)}
+		self.assertEqual(set(rows), {line.line_key, f"storno:{line.line_key}"})
+		reversal = rows[f"storno:{line.line_key}"]
+		self.assertEqual(
+			(
+				reversal.general_reversal,
+				reversal.debit_credit,
+				reversal.contra_account,
+				reversal.document_field_1,
+			),
+			(1, "H", 3250, line.document_field_1),
+		)
+
+	def test_unreconcile_advance_allocation_before_transfer_drops_line(self):
+		payment, allocation, _line = self._allocated_advance()
+		unreconcile = frappe.get_doc(
+			{
+				"doctype": "Unreconcile Payment",
+				"company": self.company,
+				"voucher_type": "Payment Entry",
+				"voucher_no": payment.name,
+			}
+		)
+		unreconcile.add_references()
+		unreconcile.save()
+		unreconcile.submit()
+		payment_sync.sync_payment("Payment Entry", payment.name)
+		self.assertEqual(bookings(allocation), [])
 
 	def test_unreconcile_queues_recompute(self):
 		invoice, _invoice_document = self._invoice()

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: DATEV for ERPNext\n"
 "Report-Msgid-Bugs-To: oss@effizienzagent.de\n"
-"POT-Creation-Date: 2026-11-03 09:12+0000\n"
+"POT-Creation-Date: 2026-11-03 09:29+0000\n"
 "PO-Revision-Date: 2026-11-02 13:27+0000\n"
 "Last-Translator: oss@effizienzagent.de\n"
 "Language: de\n"
@@ -38,7 +38,7 @@ msgid "Charges on account {0} are not supported yet"
 msgstr "Zusatzkosten auf Konto {0} werden noch nicht unterstützt"
 
 #. Label of the checked_at (Datetime) field in DocType 'DATEV Payment Check'
-#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:24
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:27
 msgid "Checked At"
 msgstr "Geprüft am"
 
@@ -67,16 +67,16 @@ msgstr "DATEV-ERPNext-Einstellungen"
 
 #. Name of a role
 #: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:14
-#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:39
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:59
 msgid "DATEV Manager"
 msgstr "DATEV Manager"
 
 #. Name of a DocType
-#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:30
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:50
 msgid "DATEV Payment Check"
 msgstr "DATEV-Zahlungsprüfung"
 
-#: datev_erpnext/payment_sync.py:225
+#: datev_erpnext/payment_sync.py:226
 #, python-brace-format
 msgid "DATEV line {0} is in batch {1}, which is being sent. Try again once the batch is done."
 msgstr "DATEV-Zeile {0} ist im Stapel {1}, der gerade gesendet wird. Bitte erneut versuchen, sobald der Stapel abgeschlossen ist."
@@ -86,7 +86,7 @@ msgstr "DATEV-Zeile {0} ist im Stapel {1}, der gerade gesendet wird. Bitte erneu
 msgid "DATEV note: {0}"
 msgstr "DATEV-Hinweis: {0}"
 
-#: datev_erpnext/sync.py:427
+#: datev_erpnext/sync.py:436
 #, python-brace-format
 msgid "DATEV status is not available for {0}."
 msgstr "Für {0} ist kein DATEV-Status verfügbar."
@@ -169,7 +169,7 @@ msgstr "Zuletzt angehängte PDF"
 msgid "Leave empty to use the default print format of Sales Invoice."
 msgstr "Leer lassen, um das Standard-Druckformat der Ausgangsrechnung zu verwenden."
 
-#: datev_erpnext/payments.py:217
+#: datev_erpnext/payments.py:224
 #, python-brace-format
 msgid "Line for purchase invoice {0} is waiting for purchase invoices to be synced."
 msgstr "Die Zeile zur Eingangsrechnung {0} wartet, bis Eingangsrechnungen synchronisiert werden."
@@ -222,7 +222,7 @@ msgstr "Partei"
 msgid "Party Name"
 msgstr "Parteiname"
 
-#: datev_erpnext/payments.py:53
+#: datev_erpnext/payments.py:55
 #, python-brace-format
 msgid "Payment Entry {0} has no bank or cash account on its bank side."
 msgstr "Zahlung {0} hat auf der Bankseite kein Bank- oder Kassenkonto."
@@ -307,7 +307,7 @@ msgid "Send submitted Purchase Invoices with the supplier's document to DATEV, f
 msgstr "Gebuchte Eingangsrechnungen mit dem Beleg des Lieferanten ab dem Synchronisierungsdatum an DATEV übertragen. Gibt auch die Zahlungszeilen an Lieferanten für diese Rechnungen frei."
 
 #. Label of the source_key (Data) field in DocType 'DATEV Payment Check'
-#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:16
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:19
 msgid "Source Key"
 msgstr "Quellschlüssel"
 
@@ -335,7 +335,7 @@ msgstr "Synchronisieren ab"
 
 #. Name of a role
 #: datev_erpnext/datev_erpnext/doctype/datev_erpnext_settings/datev_erpnext_settings.json:19
-#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:35
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:55
 msgid "System Manager"
 msgstr "Systemmanager"
 
@@ -364,6 +364,11 @@ msgstr "Die Steuerzeile auf Konto {0} hat die Kategorie {1}, die noch nicht unte
 msgid "Tax row on account {0} uses charge type {1}, which is not supported yet."
 msgstr "Die Steuerzeile auf Konto {0} verwendet die Berechnungsart {1}, die noch nicht unterstützt wird."
 
+#: datev_erpnext/payments.py:120
+#, python-brace-format
+msgid "The advance allocation of row {0} in {1} cannot be mapped: it needs one party line on a receivable or payable account and one line on a separate advance account."
+msgstr "Die Verrechnung der Anzahlung in Zeile {0} von {1} kann nicht zugeordnet werden: Sie braucht eine Zeile mit Partei auf einem Forderungs- oder Verbindlichkeitskonto und eine Zeile auf einem separaten Anzahlungskonto."
+
 #: datev_erpnext/sync.py:323
 #, python-brace-format
 msgid "The posting text template {0} is invalid"
@@ -383,7 +388,24 @@ msgstr "Belegart"
 msgid "Vouchers without DATEV"
 msgstr "Belege ohne DATEV"
 
-#: datev_erpnext/payments.py:236
+#. Label of the waiting_reason (Small Text) field in DocType 'DATEV Payment
+#. Check'
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:44
+msgid "Waiting Reason"
+msgstr "Grund des Wartens"
+
+#. Label of the waiting_name (Dynamic Link) field in DocType 'DATEV Payment
+#. Check'
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:39
+msgid "Waiting for"
+msgstr "Wartet auf"
+
+#. Label of the waiting_doctype (Link) field in DocType 'DATEV Payment Check'
+#: datev_erpnext/datev_erpnext/doctype/datev_payment_check/datev_payment_check.json:33
+msgid "Waiting for Type"
+msgstr "Wartet auf Typ"
+
+#: datev_erpnext/payments.py:246
 #, python-brace-format
 msgid "Waiting for {0} {1} to be transferred to DATEV."
 msgstr "Wartet, bis {0} {1} an DATEV übertragen ist."
@@ -393,7 +415,7 @@ msgstr "Wartet, bis {0} {1} an DATEV übertragen ist."
 msgid "When the adapter last compared a payment's ledger with its DATEV lines."
 msgstr "Wann der Adapter die Buchungen einer Zahlung zuletzt mit ihren DATEV-Zeilen verglichen hat."
 
-#: datev_erpnext/payment_sync.py:64 datev_erpnext/sync.py:219
+#: datev_erpnext/payment_sync.py:65 datev_erpnext/sync.py:219
 msgid "no booking lines, not transferred."
 msgstr "keine Buchungszeilen, nicht übertragen."
 

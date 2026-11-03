@@ -5,7 +5,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from datev_erpnext import sync
-from datev_erpnext.payments import PaymentLine, Waiting, voucher_lines
+from datev_erpnext.payments import PaymentLine, Waiting, _allocation, voucher_lines
 from datev_erpnext.tests.factories import (
 	CUSTOMER_NAME,
 	SUPPLIER_NAME,
@@ -304,3 +304,23 @@ class TestPayments(IntegrationTestCase):
 
 		frappe.db.set_single_value("DATEV ERPNext Settings", "sync_from_date", "2999-01-01")
 		self.assertEqual(voucher_lines("Payment Entry", payment.name), [self._creditor(invoice, None)])
+
+	def test_unmappable_advance_allocation_raises(self):
+		payment = make_payment(self.company, [], amount=10)
+		receivable = account(self.company, "1200")
+		entries = [
+			frappe._dict(
+				account=receivable,
+				party_type="Customer",
+				party=customer(),
+				debit=debit,
+				credit=credit,
+				against_voucher_type=None,
+				against_voucher=None,
+				posting_date=payment.posting_date,
+			)
+			for debit, credit in ((10, 0), (0, 10))
+		]
+		with self.assertRaises(frappe.ValidationError) as raised:
+			_allocation(payment, "row-1", entries)
+		self.assertIn("cannot be mapped", str(raised.exception))

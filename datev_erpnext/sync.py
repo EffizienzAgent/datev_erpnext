@@ -375,6 +375,7 @@ def missing_invoices(
 			and voucher.posting_date >= %(from_date)s
 			{to_date_filter}
 			{source.get("condition", "")}
+			{_recheck_condition(doctype)}
 			and not exists (
 				select 1 from `tabDATEV Document` document
 				where document.source_key = concat(%(doctype)s, ':', voucher.name)
@@ -399,6 +400,14 @@ def missing_invoices(
 		},
 		as_dict=True,
 	)
+
+
+def _recheck_condition(doctype: str) -> str:
+	if doctype not in PAYMENT_DOCTYPES:
+		return ""
+	from datev_erpnext.payment_sync import recheck_condition
+
+	return "and " + recheck_condition("concat(%(doctype)s, ':', voucher.name)")
 
 
 def latest_comments(names: list[str], doctype: str = SALES_INVOICE) -> dict[str, frappe._dict]:
