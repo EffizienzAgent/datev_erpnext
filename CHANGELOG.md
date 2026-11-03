@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/EffizienzAgent/datev_erpnext/compare/v0.2.0...v0.3.0) (2026-11-03)
+
+
+### Features
+
+* v0.3 – payments and purchase invoices ([#5](https://github.com/EffizienzAgent/datev_erpnext/issues/5)) ([f9b7837](https://github.com/EffizienzAgent/datev_erpnext/commit/f9b7837b1bccbdf54b5542874413300b179cc9f7))
+
+
+### Documentation
+
+* drop local paths from plans, configurable core path in dev compose ([fe33ab2](https://github.com/EffizienzAgent/datev_erpnext/commit/fe33ab2f475468cb47997653cf70cc198cbbd760))
+
 ## [0.2.0](https://github.com/EffizienzAgent/datev_erpnext/compare/v0.1.0...v0.2.0) (2026-11-02)
 
 
